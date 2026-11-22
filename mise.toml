@@ -2,4 +2,4 @@
 buf = "1.75.0"
 dart = "latest"
 just = "1.59.0"
-protobuf = "35.1"
+protobuf = "36.2"
