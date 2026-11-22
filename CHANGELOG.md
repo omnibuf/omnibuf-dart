@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.1.1
+
+- Hardened cumulative decode element budgets across all 4 tiers, `decodeBlind`, and Field #0 validation.
+- Fixed `ProtobufOmniBufCodec` enum map and repeated enum decoding (`TypeError` on unknown values).
+- Added recursion/cycle guards on encoding and `SchemaMeta`, default validation in `OpaqueMessage.marshalInto`, trailing-bytes checks on generated `Opaque` getters, Field #0 empty-string tombstones, and nested-type/import/keyword escaping in `protoc-gen-omnibuf-dart`.
+
 ## 0.1.0
 
 - Initial OmniBuf v0.1 Dart implementation covering all 16 wire types, 1/2/4/9-byte Prefix-Varints, 64-bit ZigZag, strict UTF-8 validation, unsigned UTF-8 deterministic map sorting, Field #0 `SchemaMeta`, and container depth/allocation budgets.

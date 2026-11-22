@@ -4,7 +4,7 @@ description: >-
   wire types, Field #0 self-describing metadata, lazy Opaque views with
   in-place wire splicing, package:protobuf integration, declarative class
   schemas, and protoc-gen-omnibuf-dart code generator.
-version: 0.1.0
+version: 0.1.1
 repository: https://github.com/omnibuf/omnibuf-dart
 homepage: https://omnibuf.com
 issue_tracker: https://github.com/omnibuf/omnibuf-dart/issues
