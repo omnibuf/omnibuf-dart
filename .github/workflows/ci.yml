@@ -48,7 +48,7 @@ jobs:
       - name: Install Go for conformance-runner
         uses: actions/setup-go@v5
         with:
-          go-version: '1.24'
+          go-version: '1.27'
 
       - name: Install conformance-runner
         run: go install github.com/omnibuf/omnibuf-go/cmd/conformance-runner@latest
