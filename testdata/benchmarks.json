@@ -1,0 +1,173 @@
+{
+  "language": "dart",
+  "runtime": "dart 3.14.1 (AOT)",
+  "platform": "macos",
+  "arch": "arm64",
+  "cpu": "Apple M1 Pro",
+  "workload": "PeerUpdate",
+  "categories": [
+    {
+      "id": "encode",
+      "title": "Full Message Encode Speed",
+      "unit": "ns",
+      "results": [
+        {
+          "name": "OmniBuf (Generated)",
+          "nsPerOp": 971,
+          "opsPerSec": 1029866,
+          "wireBytes": 365,
+          "highlight": true,
+          "baseline": true
+        },
+        {
+          "name": "OmniBuf (Schema)",
+          "nsPerOp": 1568,
+          "opsPerSec": 637755,
+          "wireBytes": 365,
+          "highlight": true
+        },
+        {
+          "name": "package:protobuf",
+          "nsPerOp": 3761,
+          "opsPerSec": 265887,
+          "wireBytes": 343
+        },
+        {
+          "name": "dart:convert (JSON)",
+          "nsPerOp": 9414,
+          "opsPerSec": 106225,
+          "wireBytes": 803
+        }
+      ]
+    },
+    {
+      "id": "decode",
+      "title": "Full Message Decode Speed",
+      "unit": "ns",
+      "results": [
+        {
+          "name": "OmniBuf (Generated)",
+          "nsPerOp": 1057,
+          "opsPerSec": 946074,
+          "highlight": true,
+          "baseline": true
+        },
+        {
+          "name": "OmniBuf (Schema)",
+          "nsPerOp": 3199,
+          "opsPerSec": 312598,
+          "highlight": true
+        },
+        {
+          "name": "package:protobuf",
+          "nsPerOp": 5083,
+          "opsPerSec": 196734
+        },
+        {
+          "name": "dart:convert (JSON)",
+          "nsPerOp": 5468,
+          "opsPerSec": 182882
+        }
+      ]
+    },
+    {
+      "id": "lookup_city",
+      "title": "Read a Single Nested Field",
+      "unit": "ns",
+      "results": [
+        {
+          "name": "OmniBuf (Opaque)",
+          "nsPerOp": 393,
+          "opsPerSec": 2544529,
+          "highlight": true,
+          "baseline": true
+        },
+        {
+          "name": "package:protobuf",
+          "nsPerOp": 3674,
+          "opsPerSec": 272183
+        },
+        {
+          "name": "dart:convert (JSON)",
+          "nsPerOp": 5458,
+          "opsPerSec": 183217
+        }
+      ]
+    },
+    {
+      "id": "mutate_sequence",
+      "title": "Selective Single-Field Mutation",
+      "unit": "ns",
+      "results": [
+        {
+          "name": "OmniBuf (Opaque Splice)",
+          "nsPerOp": 759,
+          "opsPerSec": 1317523,
+          "highlight": true,
+          "baseline": true
+        },
+        {
+          "name": "package:protobuf",
+          "nsPerOp": 7172,
+          "opsPerSec": 139431
+        },
+        {
+          "name": "dart:convert (JSON)",
+          "nsPerOp": 15189,
+          "opsPerSec": 65837
+        }
+      ]
+    },
+    {
+      "id": "encode_nested_shift",
+      "title": "Large Embedded Message Encode",
+      "unit": "ns",
+      "results": [
+        {
+          "name": "OmniBuf (Generated)",
+          "nsPerOp": 48857,
+          "opsPerSec": 20468,
+          "wireBytes": 39255,
+          "highlight": true,
+          "baseline": true
+        },
+        {
+          "name": "package:protobuf",
+          "nsPerOp": 157251,
+          "opsPerSec": 6359,
+          "wireBytes": 39229
+        },
+        {
+          "name": "dart:convert (JSON)",
+          "nsPerOp": 208392,
+          "opsPerSec": 4799,
+          "wireBytes": 39681
+        }
+      ]
+    },
+    {
+      "id": "mutate_embedded_grow",
+      "title": "Embedded Message Growth",
+      "unit": "ns",
+      "results": [
+        {
+          "name": "OmniBuf (Opaque Splice)",
+          "nsPerOp": 48002,
+          "opsPerSec": 20832,
+          "highlight": true,
+          "baseline": true
+        },
+        {
+          "name": "package:protobuf",
+          "nsPerOp": 110549,
+          "opsPerSec": 9046
+        },
+        {
+          "name": "dart:convert (JSON)",
+          "nsPerOp": 159881,
+          "opsPerSec": 6255
+        }
+      ]
+    }
+  ]
+}

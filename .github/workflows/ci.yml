@@ -1,0 +1,66 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  lint:
+    name: Format & Analyze
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install tools via mise
+        uses: jdx/mise-action@v2
+        with:
+          install: true
+
+      - name: Install Dart dependencies
+        run: just install
+
+      - name: Check formatting
+        run: just fmt-check
+
+      - name: Static analysis & Protobuf lint
+        run: just lint
+
+  test:
+    name: Build, Test & Conformance
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install tools via mise
+        uses: jdx/mise-action@v2
+        with:
+          install: true
+
+      - name: Install Go for conformance-runner
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.24'
+
+      - name: Install conformance-runner
+        run: go install github.com/omnibuf/omnibuf-go/cmd/conformance-runner@latest
+
+      - name: Install Dart dependencies
+        run: just install
+
+      - name: Build AOT binaries
+        run: just build
+
+      - name: Run unit and integration tests
+        run: just test
+
+      - name: Run cross-language conformance suite
+        run: just conformance

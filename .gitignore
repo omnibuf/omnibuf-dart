@@ -1,0 +1,11 @@
+.dart_tool/
+.packages
+build/
+bin/conformance_dart
+bin/protoc-gen-omnibuf-dart
+bin/bench_dart
+pubspec.lock
+*.exe
+*.jit
+*.aot
+.DS_Store

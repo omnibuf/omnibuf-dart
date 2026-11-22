@@ -1,0 +1,24 @@
+name: omnibuf
+description: >-
+  OmniBuf v0.1 binary wire format for Dart: Prefix-Varint codec, 16 explicit
+  wire types, Field #0 self-describing metadata, lazy Opaque views with
+  in-place wire splicing, package:protobuf integration, declarative class
+  schemas, and protoc-gen-omnibuf-dart code generator.
+version: 0.1.0
+repository: https://github.com/omnibuf/omnibuf-dart
+homepage: https://omnibuf.com
+issue_tracker: https://github.com/omnibuf/omnibuf-dart/issues
+
+environment:
+  sdk: '>=3.4.0 <4.0.0'
+
+dependencies:
+  fixnum: ^1.1.0
+  protobuf: ^3.1.0
+
+dev_dependencies:
+  lints: ^5.0.0
+  test: ^1.25.0
+
+executables:
+  protoc-gen-omnibuf-dart: protoc-gen-omnibuf-dart
