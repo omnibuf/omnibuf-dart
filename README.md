@@ -51,6 +51,10 @@ void main() {
 }
 ```
 
+## Benchmarks
+
+Dart benchmark results, methodology, and cross-language comparisons live at [omnibuf.com/benchmarks?lang=dart](https://omnibuf.com/benchmarks?lang=dart) (all languages at [omnibuf.com/benchmarks](https://omnibuf.com/benchmarks)). Run `just bench` locally to execute the AOT suite and regenerate [`testdata/benchmarks.json`](testdata/benchmarks.json).
+
 ## Development & Verification
 
 ```bash
