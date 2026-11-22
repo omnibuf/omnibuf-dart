@@ -21,27 +21,215 @@ abstract final class _PbType {
   static const int sint64Type = 18;
 }
 
+const Set<String> _dartKeywords = <String>{
+  'abstract',
+  'as',
+  'assert',
+  'async',
+  'await',
+  'base',
+  'break',
+  'case',
+  'catch',
+  'class',
+  'const',
+  'continue',
+  'covariant',
+  'default',
+  'deferred',
+  'do',
+  'dynamic',
+  'else',
+  'enum',
+  'export',
+  'extends',
+  'extension',
+  'external',
+  'factory',
+  'false',
+  'final',
+  'finally',
+  'for',
+  'Function',
+  'get',
+  'hide',
+  'if',
+  'implements',
+  'import',
+  'in',
+  'interface',
+  'is',
+  'late',
+  'library',
+  'mixin',
+  'new',
+  'null',
+  'of',
+  'on',
+  'operator',
+  'part',
+  'required',
+  'rethrow',
+  'return',
+  'sealed',
+  'set',
+  'show',
+  'static',
+  'super',
+  'switch',
+  'sync',
+  'this',
+  'throw',
+  'true',
+  'try',
+  'typedef',
+  'var',
+  'void',
+  'when',
+  'while',
+  'with',
+  'yield',
+};
+
+const Set<String> _reservedFieldNames = <String>{
+  ..._dartKeywords,
+  // Object members
+  'hashCode',
+  'runtimeType',
+  'toString',
+  'noSuchMethod',
+  // Generated eager message members
+  'reset',
+  'estimateBodyBytes',
+  'buildSchemaMeta',
+  'encode',
+  'encodeInto',
+  'decode',
+  'decodeInto',
+  'decodeBody',
+  // OpaqueMessage base class members
+  'rawBytes',
+  'setPatch',
+  'hasPatch',
+  'getPatch',
+  'clearPatches',
+  'marshalAppend',
+  'marshalInto',
+};
+
+const Set<String> _reservedTypeNames = <String>{
+  ..._dartKeywords,
+  'Object',
+  'String',
+  'int',
+  'double',
+  'bool',
+  'num',
+  'List',
+  'Map',
+  'Set',
+  'Uint8List',
+  'ob',
+};
+
+const Set<String> _reservedEnumValueNames = <String>{
+  ..._dartKeywords,
+  'hashCode',
+  'runtimeType',
+  'toString',
+  'noSuchMethod',
+};
+
+class _TypeRef {
+  final String fileName;
+  final String dartName;
+  final String opaqueName;
+
+  const _TypeRef({
+    required this.fileName,
+    required this.dartName,
+    required this.opaqueName,
+  });
+}
+
+String _normalizeFqn(String fqn) => fqn.startsWith('.') ? fqn : '.$fqn';
+
+String _escapeTypeName(String raw) {
+  var name = raw.replaceAll(RegExp(r'^_+'), '');
+  if (name.isEmpty) name = 'Message';
+  if (RegExp(r'^[0-9]').hasMatch(name)) {
+    name = 'T$name';
+  }
+  if (_reservedTypeNames.contains(name)) {
+    name = '${name}_';
+  }
+  return name;
+}
+
+String _escapeEnumValueName(String raw, int index) {
+  var name = raw.replaceAll(RegExp(r'^_+'), '');
+  if (name.isEmpty) name = 'VALUE_$index';
+  if (RegExp(r'^[0-9]').hasMatch(name)) {
+    name = 'V_$name';
+  }
+  if (_reservedEnumValueNames.contains(name)) {
+    name = '${name}_';
+  }
+  return name;
+}
+
 /// Generates idiomatic OmniBuf Dart source code for a [CodeGeneratorRequest].
 CodeGeneratorResponse generateOmniBufDart(CodeGeneratorRequest req) {
   final resp = CodeGeneratorResponse();
   final targetSet = req.fileToGenerate.toSet();
 
   final mapEntries = <String, ProtoMessageDescriptor>{};
+  final typeRegistry = <String, _TypeRef>{};
+  final knownFiles = <String>{};
 
   void collectFile(ProtoFileDescriptor f) {
-    final prefix = f.packageName.isEmpty ? '' : '.${f.packageName}';
-    void collectMsg(ProtoMessageDescriptor m, String scope) {
+    knownFiles.add(f.name);
+    final pkgScope = f.packageName.isEmpty ? '' : '.${f.packageName}';
+
+    void collectEnum(ProtoEnumDescriptor e, String scope, String dartPrefix) {
+      final fqn = '$scope.${e.name}';
+      final dartName = _escapeTypeName(
+        dartPrefix.isEmpty ? e.name : '${dartPrefix}_${e.name}',
+      );
+      typeRegistry[fqn] = _TypeRef(
+        fileName: f.name,
+        dartName: dartName,
+        opaqueName: 'Opaque$dartName',
+      );
+    }
+
+    void collectMsg(ProtoMessageDescriptor m, String scope, String dartPrefix) {
       final fqn = '$scope.${m.name}';
       if (m.isMapEntry) {
         mapEntries[fqn] = m;
+        return;
+      }
+      final dartName = _escapeTypeName(
+        dartPrefix.isEmpty ? m.name : '${dartPrefix}_${m.name}',
+      );
+      typeRegistry[fqn] = _TypeRef(
+        fileName: f.name,
+        dartName: dartName,
+        opaqueName: 'Opaque$dartName',
+      );
+      for (final e in m.enumTypes) {
+        collectEnum(e, fqn, dartName);
       }
       for (final nested in m.nestedTypes) {
-        collectMsg(nested, fqn);
+        collectMsg(nested, fqn, dartName);
       }
     }
 
+    for (final e in f.enums) {
+      collectEnum(e, pkgScope, '');
+    }
     for (final m in f.messages) {
-      collectMsg(m, prefix);
+      collectMsg(m, pkgScope, '');
     }
   }
 
@@ -52,7 +240,7 @@ CodeGeneratorResponse generateOmniBufDart(CodeGeneratorRequest req) {
   for (final f in req.protoFiles) {
     if (targetSet.isNotEmpty && !targetSet.contains(f.name)) continue;
     final outName = _outputFileName(f.name);
-    final content = _generateFile(f, mapEntries);
+    final content = _generateFile(f, mapEntries, typeRegistry, knownFiles);
     resp.files.add(CodeGeneratorResponseFile(name: outName, content: content));
   }
   return resp;
@@ -65,22 +253,91 @@ String _outputFileName(String protoName) {
   return '$base.omnibuf.dart';
 }
 
-String _toCamelCase(String snake) {
-  final parts = snake.split('_');
-  if (parts.isEmpty) return snake;
+String _relativeImportPath(String fromProto, String toProto) {
+  final fromOut = _outputFileName(fromProto);
+  final toOut = _outputFileName(toProto);
+  final fromParts = fromOut.split('/')..removeLast();
+  final toParts = toOut.split('/');
+  var common = 0;
+  while (common < fromParts.length &&
+      common < toParts.length - 1 &&
+      fromParts[common] == toParts[common]) {
+    common++;
+  }
+  final ups = fromParts.length - common;
+  final rel = <String>[
+    for (var i = 0; i < ups; i++) '..',
+    ...toParts.sublist(common),
+  ];
+  return rel.join('/');
+}
+
+String _toCamelCase(String snake, {int fieldNumber = 0}) {
+  final parts = snake.split('_').where((p) => p.isNotEmpty).toList();
+  if (parts.isEmpty) {
+    return fieldNumber > 0 ? 'field$fieldNumber' : 'field';
+  }
   final sb = StringBuffer(parts.first);
   for (var i = 1; i < parts.length; i++) {
     final p = parts[i];
-    if (p.isEmpty) continue;
     sb.write(p[0].toUpperCase());
     if (p.length > 1) sb.write(p.substring(1));
   }
-  return sb.toString();
+  var name = sb.toString();
+  if (RegExp(r'^[0-9]').hasMatch(name)) {
+    name = 'f$name';
+  }
+  if (_reservedFieldNames.contains(name)) {
+    name = '${name}_';
+  }
+  return name;
+}
+
+Map<int, String> _assignFieldNames(List<ProtoFieldDescriptor> sortedFields) {
+  final used = <String>{};
+  final names = <int, String>{};
+  for (final f in sortedFields) {
+    var candidate = _toCamelCase(f.name, fieldNumber: f.number);
+    while (used.contains(candidate)) {
+      candidate = '${candidate}_${f.number}';
+    }
+    used.add(candidate);
+    names[f.number] = candidate;
+  }
+  return names;
 }
 
 String _shortTypeName(String fqn) {
   final idx = fqn.lastIndexOf('.');
-  return idx >= 0 ? fqn.substring(idx + 1) : fqn;
+  return _escapeTypeName(idx >= 0 ? fqn.substring(idx + 1) : fqn);
+}
+
+String _resolveTypeName(
+  String fqn,
+  String currentFile,
+  Map<String, _TypeRef> typeRegistry,
+  Map<String, String> depAliases,
+) {
+  final ref = typeRegistry[_normalizeFqn(fqn)];
+  if (ref == null) return _shortTypeName(fqn);
+  if (ref.fileName == currentFile) return ref.dartName;
+  final alias = depAliases[ref.fileName];
+  if (alias != null) return '$alias.${ref.dartName}';
+  return ref.dartName;
+}
+
+String _resolveOpaqueTypeName(
+  String fqn,
+  String currentFile,
+  Map<String, _TypeRef> typeRegistry,
+  Map<String, String> depAliases,
+) {
+  final ref = typeRegistry[_normalizeFqn(fqn)];
+  if (ref == null) return 'Opaque${_shortTypeName(fqn)}';
+  if (ref.fileName == currentFile) return ref.opaqueName;
+  final alias = depAliases[ref.fileName];
+  if (alias != null) return '$alias.${ref.opaqueName}';
+  return ref.opaqueName;
 }
 
 String _dartScalarType(int pbType) {
@@ -245,10 +502,15 @@ String _mapKeySortStmt(String keysVar, int pbType) {
     case _PbType.stringType:
       return '$keysVar.sort(ob.compareUtf8);';
     case _PbType.uint32Type:
-    case _PbType.uint64Type:
     case _PbType.fixed32Type:
+      return '$keysVar.sort((a, b) => (a & 0xFFFFFFFF).compareTo(b & 0xFFFFFFFF));';
+    case _PbType.uint64Type:
     case _PbType.fixed64Type:
       return '$keysVar.sort(ob.compareUint64);';
+    case _PbType.int32Type:
+    case _PbType.sint32Type:
+    case _PbType.sfixed32Type:
+      return '$keysVar.sort((a, b) => a.toSigned(32).compareTo(b.toSigned(32)));';
     case _PbType.boolType:
       return '$keysVar.sort((a, b) => (a ? 1 : 0) - (b ? 1 : 0));';
     default:
@@ -259,76 +521,175 @@ String _mapKeySortStmt(String keysVar, int pbType) {
 String _generateFile(
   ProtoFileDescriptor file,
   Map<String, ProtoMessageDescriptor> mapEntries,
+  Map<String, _TypeRef> typeRegistry,
+  Set<String> knownFiles,
 ) {
   final sb = StringBuffer();
   sb.writeln('// GENERATED CODE - DO NOT MODIFY BY HAND.');
   sb.writeln('// Source: ${file.name}');
   sb.writeln(
-    '// ignore_for_file: unused_import, constant_identifier_names, non_constant_identifier_names, prefer_final_locals',
+    '// ignore_for_file: unused_import, constant_identifier_names, non_constant_identifier_names, prefer_final_locals, unnecessary_this, camel_case_types',
   );
   sb.writeln();
   sb.writeln("import 'dart:typed_data';");
   sb.writeln();
   sb.writeln("import 'package:omnibuf/omnibuf.dart' as ob;");
+
+  final depAliases = <String, String>{};
+  final depImports = <String>[];
+  var depIndex = 0;
+  for (final dep in file.dependencies) {
+    if (dep == file.name) continue;
+    final relPath = _relativeImportPath(file.name, dep);
+    if (knownFiles.contains(dep)) {
+      final alias = 'dep_${depIndex++}';
+      depAliases[dep] = alias;
+      depImports.add("import '$relPath' as $alias;");
+    } else {
+      depImports.add("import '$relPath';");
+    }
+  }
+  if (depImports.isNotEmpty) {
+    depImports.sort();
+    sb.writeln();
+    for (final line in depImports) {
+      sb.writeln(line);
+    }
+  }
   sb.writeln();
 
+  final pkgScope = file.packageName.isEmpty ? '' : '.${file.packageName}';
   for (final e in file.enums) {
-    sb.writeln('abstract final class ${e.name} {');
-    for (final (name, value) in e.values) {
-      sb.writeln('  static const int $name = $value;');
-    }
-    sb.writeln('}');
-    sb.writeln();
+    _generateEnum(sb, e, _escapeTypeName(e.name));
   }
 
-  final pkgPrefix = file.packageName.isEmpty ? '' : '.${file.packageName}';
   for (final m in file.messages) {
     if (m.isMapEntry) continue;
-    _generateMessage(sb, m, pkgPrefix, mapEntries);
+    _generateMessageTree(
+      sb,
+      m,
+      file.name,
+      pkgScope,
+      '',
+      mapEntries,
+      typeRegistry,
+      depAliases,
+    );
   }
 
   return sb.toString();
 }
 
+void _generateEnum(StringBuffer sb, ProtoEnumDescriptor e, String enumName) {
+  sb.writeln('abstract final class $enumName {');
+  final used = <String>{};
+  for (var i = 0; i < e.values.length; i++) {
+    final (rawName, value) = e.values[i];
+    var vName = _escapeEnumValueName(rawName, i);
+    while (used.contains(vName)) {
+      vName = '${vName}_$i';
+    }
+    used.add(vName);
+    sb.writeln('  static const int $vName = $value;');
+  }
+  sb.writeln('}');
+  sb.writeln();
+}
+
+void _generateMessageTree(
+  StringBuffer sb,
+  ProtoMessageDescriptor m,
+  String currentFile,
+  String scope,
+  String dartPrefix,
+  Map<String, ProtoMessageDescriptor> mapEntries,
+  Map<String, _TypeRef> typeRegistry,
+  Map<String, String> depAliases,
+) {
+  final fqn = '$scope.${m.name}';
+  final className = _escapeTypeName(
+    dartPrefix.isEmpty ? m.name : '${dartPrefix}_${m.name}',
+  );
+  final fullName = fqn.startsWith('.') ? fqn.substring(1) : fqn;
+
+  for (final e in m.enumTypes) {
+    final nestedEnumName = _escapeTypeName('${className}_${e.name}');
+    _generateEnum(sb, e, nestedEnumName);
+  }
+
+  _generateMessage(
+    sb,
+    m,
+    className,
+    fullName,
+    currentFile,
+    mapEntries,
+    typeRegistry,
+    depAliases,
+  );
+
+  for (final nested in m.nestedTypes) {
+    if (nested.isMapEntry) continue;
+    _generateMessageTree(
+      sb,
+      nested,
+      currentFile,
+      fqn,
+      className,
+      mapEntries,
+      typeRegistry,
+      depAliases,
+    );
+  }
+}
+
 void _generateMessage(
   StringBuffer sb,
   ProtoMessageDescriptor m,
-  String pkgPrefix,
+  String className,
+  String fullName,
+  String currentFile,
   Map<String, ProtoMessageDescriptor> mapEntries,
+  Map<String, _TypeRef> typeRegistry,
+  Map<String, String> depAliases,
 ) {
-  final className = m.name;
-  final fullName =
-      pkgPrefix.isEmpty ? className : '${pkgPrefix.substring(1)}.$className';
   final sortedFields = List<ProtoFieldDescriptor>.of(m.fields)
     ..sort((a, b) => a.number.compareTo(b.number));
+  final fieldNames = _assignFieldNames(sortedFields);
 
   bool isMapField(ProtoFieldDescriptor f) =>
       f.label == 3 &&
       f.type == _PbType.messageType &&
-      mapEntries.containsKey(f.typeName);
+      mapEntries.containsKey(_normalizeFqn(f.typeName));
+
+  String typeOf(String fqn) =>
+      _resolveTypeName(fqn, currentFile, typeRegistry, depAliases);
+
+  String opaqueTypeOf(String fqn) =>
+      _resolveOpaqueTypeName(fqn, currentFile, typeRegistry, depAliases);
 
   // ==========================================================================
   // 1. Eager Message Class
   // ==========================================================================
   sb.writeln('class $className {');
   for (final f in sortedFields) {
-    final fname = _toCamelCase(f.name);
+    final fname = fieldNames[f.number]!;
     if (isMapField(f)) {
-      final entry = mapEntries[f.typeName]!;
+      final entry = mapEntries[_normalizeFqn(f.typeName)]!;
       final kf = entry.fields.firstWhere((e) => e.number == 1);
       final vf = entry.fields.firstWhere((e) => e.number == 2);
       final kt = _dartScalarType(kf.type);
       final vt = vf.type == _PbType.messageType
-          ? _shortTypeName(vf.typeName)
+          ? typeOf(vf.typeName)
           : _dartScalarType(vf.type);
       sb.writeln('  Map<$kt, $vt> $fname;');
     } else if (f.label == 3) {
       final et = f.type == _PbType.messageType
-          ? _shortTypeName(f.typeName)
+          ? typeOf(f.typeName)
           : _dartScalarType(f.type);
       sb.writeln('  List<$et> $fname;');
     } else if (f.type == _PbType.messageType) {
-      final mt = _shortTypeName(f.typeName);
+      final mt = typeOf(f.typeName);
       sb.writeln('  $mt? $fname;');
     } else {
       sb.writeln('  ${_dartScalarType(f.type)} $fname;');
@@ -343,26 +704,26 @@ void _generateMessage(
     final inits = <String>[];
     sb.writeln('  $className({');
     for (final f in sortedFields) {
-      final fname = _toCamelCase(f.name);
+      final fname = fieldNames[f.number]!;
       if (isMapField(f)) {
-        final entry = mapEntries[f.typeName]!;
+        final entry = mapEntries[_normalizeFqn(f.typeName)]!;
         final kf = entry.fields.firstWhere((e) => e.number == 1);
         final vf = entry.fields.firstWhere((e) => e.number == 2);
         final kt = _dartScalarType(kf.type);
         final vt = vf.type == _PbType.messageType
-            ? _shortTypeName(vf.typeName)
+            ? typeOf(vf.typeName)
             : _dartScalarType(vf.type);
         sb.writeln('    Map<$kt, $vt>? $fname,');
-        inits.add('$fname = $fname ?? <$kt, $vt>{}');
+        inits.add('this.$fname = $fname ?? <$kt, $vt>{}');
       } else if (f.label == 3) {
         final et = f.type == _PbType.messageType
-            ? _shortTypeName(f.typeName)
+            ? typeOf(f.typeName)
             : _dartScalarType(f.type);
         sb.writeln('    List<$et>? $fname,');
-        inits.add('$fname = $fname ?? <$et>[]');
+        inits.add('this.$fname = $fname ?? <$et>[]');
       } else if (f.type == _PbType.bytesType) {
         sb.writeln('    Uint8List? $fname,');
-        inits.add('$fname = $fname ?? Uint8List(0)');
+        inits.add('this.$fname = $fname ?? Uint8List(0)');
       } else if (f.type == _PbType.messageType) {
         sb.writeln('    this.$fname,');
       } else {
@@ -380,43 +741,58 @@ void _generateMessage(
   // reset()
   sb.writeln('  void reset() {');
   for (final f in sortedFields) {
-    final fname = _toCamelCase(f.name);
+    final fname = fieldNames[f.number]!;
     if (isMapField(f)) {
-      sb.writeln('    $fname.clear();');
+      sb.writeln('    this.$fname.clear();');
     } else if (f.label == 3) {
-      sb.writeln('    $fname.clear();');
+      sb.writeln('    this.$fname.clear();');
     } else if (f.type == _PbType.messageType) {
-      sb.writeln('    $fname = null;');
+      sb.writeln('    this.$fname = null;');
     } else if (f.type == _PbType.bytesType) {
-      sb.writeln('    $fname = Uint8List(0);');
+      sb.writeln('    this.$fname = Uint8List(0);');
     } else {
-      sb.writeln('    $fname = ${_defaultScalarExpr(f.type)};');
+      sb.writeln('    this.$fname = ${_defaultScalarExpr(f.type)};');
     }
   }
   sb.writeln('  }');
   sb.writeln();
 
   // estimateBodyBytes() for 4B container pre-sizing
-  sb.writeln('  int estimateBodyBytes() {');
+  sb.writeln('  int estimateBodyBytes([int depth = 0]) {');
+  sb.writeln('    if (depth > ob.DecodeOptions.defaultMaxDepth) {');
+  sb.writeln(
+    "      throw const ob.OmniBufSerializeException('message encoding depth exceeded limit of \${ob.DecodeOptions.defaultMaxDepth}');",
+  );
+  sb.writeln('    }');
   sb.writeln('    var n = 32;');
   for (final f in sortedFields) {
-    final fname = _toCamelCase(f.name);
-    if (f.label != 3 &&
+    final fname = fieldNames[f.number]!;
+    if (isMapField(f)) {
+      final entry = mapEntries[_normalizeFqn(f.typeName)]!;
+      final vf = entry.fields.firstWhere((e) => e.number == 2);
+      if (vf.type == _PbType.messageType) {
+        sb.writeln(
+          '    for (final v in this.$fname.values) { n += v.estimateBodyBytes(depth + 2); }',
+        );
+      }
+    } else if (f.label != 3 &&
         (f.type == _PbType.stringType || f.type == _PbType.bytesType)) {
-      sb.writeln('    n += $fname.length;');
+      sb.writeln('    n += this.$fname.length;');
     } else if (f.label != 3 && f.type == _PbType.messageType) {
-      sb.writeln('    if ($fname != null) n += $fname!.estimateBodyBytes();');
+      sb.writeln(
+        '    if (this.$fname != null) n += this.$fname!.estimateBodyBytes(depth + 1);',
+      );
     } else if (f.label == 3 &&
         !isMapField(f) &&
         f.type == _PbType.messageType) {
       sb.writeln(
-        '    for (var i = 0; i < $fname.length; i++) { n += $fname[i].estimateBodyBytes(); }',
+        '    for (var i = 0; i < this.$fname.length; i++) { n += this.$fname[i].estimateBodyBytes(depth + 2); }',
       );
     } else if (f.label == 3 &&
         !isMapField(f) &&
         (f.type == _PbType.stringType || f.type == _PbType.bytesType)) {
       sb.writeln(
-        '    for (var i = 0; i < $fname.length; i++) { n += $fname[i].length + 4; }',
+        '    for (var i = 0; i < this.$fname.length; i++) { n += this.$fname[i].length + 4; }',
       );
     }
   }
@@ -430,7 +806,8 @@ void _generateMessage(
   sb.writeln('  }');
   sb.writeln();
   sb.writeln(
-      '  static ob.SchemaMeta _buildSchemaMeta(int depth, int maxDepth) {');
+    '  static ob.SchemaMeta _buildSchemaMeta(int depth, int maxDepth) {',
+  );
   sb.writeln('    final fields = <int, String>{');
   for (final f in sortedFields) {
     sb.writeln("      ${f.number}: '${f.name}',");
@@ -440,18 +817,18 @@ void _generateMessage(
   sb.writeln('    if (depth + 2 <= maxDepth) {');
   for (final f in sortedFields) {
     if (isMapField(f)) {
-      final entry = mapEntries[f.typeName]!;
+      final entry = mapEntries[_normalizeFqn(f.typeName)]!;
       final vf = entry.fields.firstWhere((e) => e.number == 2);
       if (vf.type == _PbType.messageType) {
-        final vt = _shortTypeName(vf.typeName);
+        final vt = typeOf(vf.typeName);
         sb.writeln(
-          '      children[${f.number}] = $vt._buildSchemaMeta(depth + 2, maxDepth);',
+          '      children[${f.number}] = $vt.buildSchemaMeta(maxDepth: maxDepth - depth - 2);',
         );
       }
     } else if (f.type == _PbType.messageType) {
-      final mt = _shortTypeName(f.typeName);
+      final mt = typeOf(f.typeName);
       sb.writeln(
-        '      children[${f.number}] = $mt._buildSchemaMeta(depth + 2, maxDepth);',
+        '      children[${f.number}] = $mt.buildSchemaMeta(maxDepth: maxDepth - depth - 2);',
       );
     }
   }
@@ -477,33 +854,40 @@ void _generateMessage(
 
   // encodeInto()
   sb.writeln(
-    '  void encodeInto(ob.OmniBufWriter w, {ob.EncodeOptions options = ob.EncodeOptions.defaults}) {',
+    '  void encodeInto(ob.OmniBufWriter w, {ob.EncodeOptions options = ob.EncodeOptions.defaults, int depth = 0}) {',
   );
+  sb.writeln('    if (depth > ob.DecodeOptions.defaultMaxDepth) {');
+  sb.writeln(
+    "      throw const ob.OmniBufSerializeException('message encoding depth exceeded limit of \${ob.DecodeOptions.defaultMaxDepth}');",
+  );
+  sb.writeln('    }');
   for (final f in sortedFields) {
-    final fname = _toCamelCase(f.name);
+    final fname = fieldNames[f.number]!;
     if (isMapField(f)) {
-      final entry = mapEntries[f.typeName]!;
+      final entry = mapEntries[_normalizeFqn(f.typeName)]!;
       final kf = entry.fields.firstWhere((e) => e.number == 1);
       final vf = entry.fields.firstWhere((e) => e.number == 2);
-      sb.writeln('    if ($fname.isNotEmpty) {');
+      sb.writeln('    if (this.$fname.isNotEmpty) {');
       sb.writeln('      w.writeTag(${f.number}, ob.WireType.map);');
       sb.writeln('      final slot = w.reserveLen2();');
       sb.writeln('      w.writeByte(${_wireTypeConst(kf.type)});');
       sb.writeln('      w.writeByte(${_wireTypeConst(vf.type)});');
-      sb.writeln('      final keys = $fname.keys.toList();');
+      sb.writeln('      final keys = this.$fname.keys.toList();');
       sb.writeln('      if (options.deterministicMaps) {');
       sb.writeln('        ${_mapKeySortStmt('keys', kf.type)}');
       sb.writeln('      }');
       sb.writeln('      w.writeVarint(keys.length);');
       sb.writeln('      for (var i = 0; i < keys.length; i++) {');
       sb.writeln('        final k = keys[i];');
-      sb.writeln('        final v = $fname[k]!;');
+      sb.writeln('        final v = this.$fname[k]!;');
       sb.writeln('        ${_writeScalarCall('w', kf.type, 'k')};');
       if (vf.type == _PbType.messageType) {
         sb.writeln(
-          '        final vSlot = w.reserveLenAuto(v.estimateBodyBytes());',
+          '        final vSlot = w.reserveLenAuto(v.estimateBodyBytes(depth + 2));',
         );
-        sb.writeln('        v.encodeInto(w, options: options);');
+        sb.writeln(
+          '        v.encodeInto(w, options: options, depth: depth + 2);',
+        );
         sb.writeln('        w.patchLenAuto(vSlot);');
       } else {
         sb.writeln('        ${_writeScalarCall('w', vf.type, 'v')};');
@@ -512,29 +896,33 @@ void _generateMessage(
       sb.writeln('      w.patchLen2(slot);');
       sb.writeln('    }');
     } else if (f.label == 3) {
-      sb.writeln('    if ($fname.isNotEmpty) {');
+      sb.writeln('    if (this.$fname.isNotEmpty) {');
       sb.writeln('      w.writeTag(${f.number}, ob.WireType.array);');
       if (f.type == _PbType.messageType) {
         sb.writeln('      var est = 8;');
         sb.writeln(
-          '      for (var i = 0; i < $fname.length; i++) { est += $fname[i].estimateBodyBytes(); }',
+          '      for (var i = 0; i < this.$fname.length; i++) { est += this.$fname[i].estimateBodyBytes(depth + 2); }',
         );
         sb.writeln('      final slot = w.reserveLenAuto(est);');
       } else {
         sb.writeln('      final slot = w.reserveLen2();');
       }
       sb.writeln('      w.writeByte(${_wireTypeConst(f.type)});');
-      sb.writeln('      w.writeVarint($fname.length);');
-      sb.writeln('      for (var i = 0; i < $fname.length; i++) {');
+      sb.writeln('      w.writeVarint(this.$fname.length);');
+      sb.writeln('      for (var i = 0; i < this.$fname.length; i++) {');
       if (f.type == _PbType.messageType) {
-        sb.writeln('        final item = $fname[i];');
+        sb.writeln('        final item = this.$fname[i];');
         sb.writeln(
-          '        final iSlot = w.reserveLenAuto(item.estimateBodyBytes());',
+          '        final iSlot = w.reserveLenAuto(item.estimateBodyBytes(depth + 2));',
         );
-        sb.writeln('        item.encodeInto(w, options: options);');
+        sb.writeln(
+          '        item.encodeInto(w, options: options, depth: depth + 2);',
+        );
         sb.writeln('        w.patchLenAuto(iSlot);');
       } else {
-        sb.writeln('        ${_writeScalarCall('w', f.type, '$fname[i]')};');
+        sb.writeln(
+          '        ${_writeScalarCall('w', f.type, 'this.$fname[i]')};',
+        );
       }
       sb.writeln('      }');
       if (f.type == _PbType.messageType) {
@@ -544,22 +932,25 @@ void _generateMessage(
       }
       sb.writeln('    }');
     } else if (f.type == _PbType.messageType) {
-      sb.writeln('    if ($fname != null) {');
-      sb.writeln('      final sub = $fname!;');
+      sb.writeln('    if (this.$fname != null) {');
+      sb.writeln('      final sub = this.$fname!;');
       sb.writeln('      w.writeTag(${f.number}, ob.WireType.subMsg);');
       sb.writeln(
-          '      final slot = w.reserveLenAuto(sub.estimateBodyBytes());');
-      sb.writeln('      sub.encodeInto(w, options: options);');
+        '      final slot = w.reserveLenAuto(sub.estimateBodyBytes(depth + 1));',
+      );
+      sb.writeln(
+        '      sub.encodeInto(w, options: options, depth: depth + 1);',
+      );
       sb.writeln('      w.patchLenAuto(slot);');
       sb.writeln('    }');
     } else if (f.type == _PbType.boolType) {
-      sb.writeln('    if ($fname) {');
+      sb.writeln('    if (this.$fname) {');
       sb.writeln('      w.writeTag(${f.number}, ob.WireType.boolTrue);');
       sb.writeln('    }');
     } else {
-      sb.writeln('    if (${_nonZeroCond(f.type, fname)}) {');
+      sb.writeln('    if (${_nonZeroCond(f.type, 'this.$fname')}) {');
       sb.writeln('      w.writeTag(${f.number}, ${_wireTypeConst(f.type)});');
-      sb.writeln('      ${_writeScalarCall('w', f.type, fname)};');
+      sb.writeln('      ${_writeScalarCall('w', f.type, 'this.$fname')};');
       sb.writeln('    }');
     }
   }
@@ -588,41 +979,49 @@ void _generateMessage(
   sb.writeln('    if (!options.merge) {');
   sb.writeln('      reset();');
   sb.writeln('    }');
+  sb.writeln(
+      '    final budget = ob.DecodeBudget(options.maxCollectionElements);');
   sb.writeln('    final r = ob.OmniBufReader(data);');
-  sb.writeln('    decodeBody(r, 0, options);');
+  sb.writeln('    decodeBody(r, 0, options, budget);');
   sb.writeln('  }');
   sb.writeln();
 
   // decodeBody()
   sb.writeln(
-    '  void decodeBody(ob.OmniBufReader r, int depth, ob.DecodeOptions options) {',
+    '  void decodeBody(ob.OmniBufReader r, int depth, ob.DecodeOptions options, [ob.DecodeBudget? budget]) {',
+  );
+  sb.writeln(
+    '    final activeBudget = budget ?? ob.DecodeBudget(options.maxCollectionElements);',
   );
   sb.writeln('    while (r.hasMore) {');
   sb.writeln('      final tag = r.readTag();');
   sb.writeln('      final fnum = tag >> 4;');
   sb.writeln('      final wt = tag & 0x0F;');
   sb.writeln('      if (fnum == 0) {');
-  sb.writeln('        ob.validateField0SubMsg(r, depth, options.maxDepth);');
+  sb.writeln(
+    '        ob.validateField0SubMsg(r, depth, options.maxDepth, maxElements: options.maxCollectionElements, budget: activeBudget);',
+  );
   sb.writeln('        continue;');
   sb.writeln('      }');
   sb.writeln('      switch (fnum) {');
   for (final f in sortedFields) {
-    final fname = _toCamelCase(f.name);
+    final fname = fieldNames[f.number]!;
     sb.writeln('        case ${f.number}:');
     if (isMapField(f)) {
-      final entry = mapEntries[f.typeName]!;
+      final entry = mapEntries[_normalizeFqn(f.typeName)]!;
       final kf = entry.fields.firstWhere((e) => e.number == 1);
       final vf = entry.fields.firstWhere((e) => e.number == 2);
       sb.writeln('          if (wt != ob.WireType.map) {');
       sb.writeln(
-        '            ob.skipAndValidateValue(r, wt, depth, options.maxDepth, maxElements: options.maxCollectionElements);',
+        '            ob.skipAndValidateValue(r, wt, depth, options.maxDepth, maxElements: options.maxCollectionElements, budget: activeBudget);',
       );
       sb.writeln('            break;');
       sb.writeln('          }');
       sb.writeln('          final nextDepth = depth + 1;');
       sb.writeln('          if (nextDepth > options.maxDepth) {');
       sb.writeln(
-          '            throw ob.OmniBufDepthLimitException(options.maxDepth);');
+        '            throw ob.OmniBufDepthLimitException(options.maxDepth);',
+      );
       sb.writeln('          }');
       sb.writeln('          final len = r.readCheckedLength();');
       sb.writeln('          final bodyEnd = r.pos + len;');
@@ -630,6 +1029,7 @@ void _generateMessage(
       sb.writeln(
         '          final (kWt, vWt, count) = body.readMapHeader(maxElements: options.maxCollectionElements);',
       );
+      sb.writeln('          activeBudget.consume(count);');
       sb.writeln(
         '          if (kWt != ${_wireTypeConst(kf.type)} || vWt != ${_wireTypeConst(vf.type)}) {',
       );
@@ -642,7 +1042,7 @@ void _generateMessage(
         '            final k = ${_readScalarExpr('body', kf.type, inCollection: true)};',
       );
       if (vf.type == _PbType.messageType) {
-        final vt = _shortTypeName(vf.typeName);
+        final vt = typeOf(vf.typeName);
         sb.writeln('            final vDepth = nextDepth + 1;');
         sb.writeln('            if (vDepth > options.maxDepth) {');
         sb.writeln(
@@ -655,12 +1055,13 @@ void _generateMessage(
           '            final vSub = body.subReader(body.pos, vEnd);',
         );
         sb.writeln('            final v = $vt();');
-        sb.writeln('            v.decodeBody(vSub, vDepth, options);');
+        sb.writeln(
+            '            v.decodeBody(vSub, vDepth, options, activeBudget);');
         sb.writeln('            body.pos = vEnd;');
-        sb.writeln('            $fname[k] = v;');
+        sb.writeln('            this.$fname[k] = v;');
       } else {
         sb.writeln(
-          '            $fname[k] = ${_readScalarExpr('body', vf.type, inCollection: true)};',
+          '            this.$fname[k] = ${_readScalarExpr('body', vf.type, inCollection: true)};',
         );
       }
       sb.writeln('          }');
@@ -673,14 +1074,15 @@ void _generateMessage(
     } else if (f.label == 3) {
       sb.writeln('          if (wt != ob.WireType.array) {');
       sb.writeln(
-        '            ob.skipAndValidateValue(r, wt, depth, options.maxDepth, maxElements: options.maxCollectionElements);',
+        '            ob.skipAndValidateValue(r, wt, depth, options.maxDepth, maxElements: options.maxCollectionElements, budget: activeBudget);',
       );
       sb.writeln('            break;');
       sb.writeln('          }');
       sb.writeln('          final nextDepth = depth + 1;');
       sb.writeln('          if (nextDepth > options.maxDepth) {');
       sb.writeln(
-          '            throw ob.OmniBufDepthLimitException(options.maxDepth);');
+        '            throw ob.OmniBufDepthLimitException(options.maxDepth);',
+      );
       sb.writeln('          }');
       sb.writeln('          final len = r.readCheckedLength();');
       sb.writeln('          final bodyEnd = r.pos + len;');
@@ -688,6 +1090,7 @@ void _generateMessage(
       sb.writeln(
         '          final (elemWt, count) = body.readArrayHeader(maxElements: options.maxCollectionElements);',
       );
+      sb.writeln('          activeBudget.consume(count);');
       sb.writeln('          if (elemWt != ${_wireTypeConst(f.type)}) {');
       sb.writeln(
         "            throw ob.OmniBufTypeMismatchException('${f.name} WireArray ElementType mismatch: \$elemWt');",
@@ -695,7 +1098,7 @@ void _generateMessage(
       sb.writeln('          }');
       sb.writeln('          for (var i = 0; i < count; i++) {');
       if (f.type == _PbType.messageType) {
-        final mt = _shortTypeName(f.typeName);
+        final mt = typeOf(f.typeName);
         sb.writeln('            final itemDepth = nextDepth + 1;');
         sb.writeln('            if (itemDepth > options.maxDepth) {');
         sb.writeln(
@@ -708,12 +1111,14 @@ void _generateMessage(
           '            final iSub = body.subReader(body.pos, iEnd);',
         );
         sb.writeln('            final item = $mt();');
-        sb.writeln('            item.decodeBody(iSub, itemDepth, options);');
+        sb.writeln(
+          '            item.decodeBody(iSub, itemDepth, options, activeBudget);',
+        );
         sb.writeln('            body.pos = iEnd;');
-        sb.writeln('            $fname.add(item);');
+        sb.writeln('            this.$fname.add(item);');
       } else {
         sb.writeln(
-          '            $fname.add(${_readScalarExpr('body', f.type, inCollection: true)});',
+          '            this.$fname.add(${_readScalarExpr('body', f.type, inCollection: true)});',
         );
       }
       sb.writeln('          }');
@@ -724,47 +1129,50 @@ void _generateMessage(
       sb.writeln('          }');
       sb.writeln('          r.pos = bodyEnd;');
     } else if (f.type == _PbType.messageType) {
-      final mt = _shortTypeName(f.typeName);
+      final mt = typeOf(f.typeName);
       sb.writeln('          if (wt != ob.WireType.subMsg) {');
       sb.writeln(
-        '            ob.skipAndValidateValue(r, wt, depth, options.maxDepth, maxElements: options.maxCollectionElements);',
+        '            ob.skipAndValidateValue(r, wt, depth, options.maxDepth, maxElements: options.maxCollectionElements, budget: activeBudget);',
       );
       sb.writeln('            break;');
       sb.writeln('          }');
       sb.writeln('          final nextDepth = depth + 1;');
       sb.writeln('          if (nextDepth > options.maxDepth) {');
       sb.writeln(
-          '            throw ob.OmniBufDepthLimitException(options.maxDepth);');
+        '            throw ob.OmniBufDepthLimitException(options.maxDepth);',
+      );
       sb.writeln('          }');
       sb.writeln('          final len = r.readCheckedLength();');
       sb.writeln('          final subEnd = r.pos + len;');
       sb.writeln('          final sub = r.subReader(r.pos, subEnd);');
-      sb.writeln('          final target = $fname ??= $mt();');
-      sb.writeln('          target.decodeBody(sub, nextDepth, options);');
+      sb.writeln('          final target = this.$fname ??= $mt();');
+      sb.writeln(
+        '          target.decodeBody(sub, nextDepth, options, activeBudget);',
+      );
       sb.writeln('          r.pos = subEnd;');
     } else if (f.type == _PbType.boolType) {
       sb.writeln(
         '          if (wt != ob.WireType.boolFalse && wt != ob.WireType.boolTrue) {',
       );
       sb.writeln(
-        '            ob.skipAndValidateValue(r, wt, depth, options.maxDepth, maxElements: options.maxCollectionElements);',
+        '            ob.skipAndValidateValue(r, wt, depth, options.maxDepth, maxElements: options.maxCollectionElements, budget: activeBudget);',
       );
       sb.writeln('            break;');
       sb.writeln('          }');
-      sb.writeln('          $fname = wt == ob.WireType.boolTrue;');
+      sb.writeln('          this.$fname = wt == ob.WireType.boolTrue;');
     } else {
       sb.writeln('          if (wt != ${_wireTypeConst(f.type)}) {');
       sb.writeln(
-        '            ob.skipAndValidateValue(r, wt, depth, options.maxDepth, maxElements: options.maxCollectionElements);',
+        '            ob.skipAndValidateValue(r, wt, depth, options.maxDepth, maxElements: options.maxCollectionElements, budget: activeBudget);',
       );
       sb.writeln('            break;');
       sb.writeln('          }');
-      sb.writeln('          $fname = ${_readScalarExpr('r', f.type)};');
+      sb.writeln('          this.$fname = ${_readScalarExpr('r', f.type)};');
     }
   }
   sb.writeln('        default:');
   sb.writeln(
-    '          ob.skipAndValidateValue(r, wt, depth, options.maxDepth, maxElements: options.maxCollectionElements);',
+    '          ob.skipAndValidateValue(r, wt, depth, options.maxDepth, maxElements: options.maxCollectionElements, budget: activeBudget);',
   );
   sb.writeln('      }');
   sb.writeln('    }');
@@ -780,14 +1188,14 @@ void _generateMessage(
   sb.writeln();
 
   for (final f in sortedFields) {
-    final fname = _toCamelCase(f.name);
+    final fname = fieldNames[f.number]!;
     if (isMapField(f)) {
-      final entry = mapEntries[f.typeName]!;
+      final entry = mapEntries[_normalizeFqn(f.typeName)]!;
       final kf = entry.fields.firstWhere((e) => e.number == 1);
       final vf = entry.fields.firstWhere((e) => e.number == 2);
       final kt = _dartScalarType(kf.type);
       final vt = vf.type == _PbType.messageType
-          ? _shortTypeName(vf.typeName)
+          ? typeOf(vf.typeName)
           : _dartScalarType(vf.type);
       // Getter
       sb.writeln('  Map<$kt, $vt> get $fname {');
@@ -798,14 +1206,19 @@ void _generateMessage(
       sb.writeln('      final tmp = $className.decode(p);');
       sb.writeln('      return tmp.$fname;');
       sb.writeln('    }');
+      sb.writeln(
+        '    final budget = ob.DecodeBudget(ob.DecodeOptions.defaultMaxCollectionElements);',
+      );
       sb.writeln('    final occs = ob.findAllFields(rawBytes, ${f.number});');
       sb.writeln('    for (var i = 0; i < occs.length; i++) {');
       sb.writeln('      final (start, end, wt) = occs[i];');
       sb.writeln('      if (wt != ob.WireType.map) continue;');
       sb.writeln('      final r = ob.OmniBufReader(rawBytes, start, end);');
       sb.writeln('      final len = r.readCheckedLength();');
-      sb.writeln('      final body = r.subReader(r.pos, r.pos + len);');
+      sb.writeln('      final bodyEnd = r.pos + len;');
+      sb.writeln('      final body = r.subReader(r.pos, bodyEnd);');
       sb.writeln('      final (kWt, vWt, count) = body.readMapHeader();');
+      sb.writeln('      budget.consume(count);');
       sb.writeln(
         '      if (kWt != ${_wireTypeConst(kf.type)} || vWt != ${_wireTypeConst(vf.type)}) {',
       );
@@ -819,18 +1232,24 @@ void _generateMessage(
       );
       if (vf.type == _PbType.messageType) {
         sb.writeln('        final vLen = body.readCheckedLength();');
-        sb.writeln(
-          '        final vSub = body.subReader(body.pos, body.pos + vLen);',
-        );
+        sb.writeln('        final vEnd = body.pos + vLen;');
+        sb.writeln('        final vSub = body.subReader(body.pos, vEnd);');
         sb.writeln('        final v = $vt();');
-        sb.writeln('        v.decodeBody(vSub, 2, ob.DecodeOptions.defaults);');
-        sb.writeln('        body.pos += vLen;');
+        sb.writeln(
+          '        v.decodeBody(vSub, 2, ob.DecodeOptions.defaults, budget);',
+        );
+        sb.writeln('        body.pos = vEnd;');
         sb.writeln('        out[k] = v;');
       } else {
         sb.writeln(
           '        out[k] = ${_readScalarExpr('body', vf.type, inCollection: true)};',
         );
       }
+      sb.writeln('      }');
+      sb.writeln('      if (body.pos != bodyEnd) {');
+      sb.writeln(
+        "        throw const ob.OmniBufParseException('WireMap trailing bytes');",
+      );
       sb.writeln('      }');
       sb.writeln('    }');
       sb.writeln('    return out;');
@@ -856,9 +1275,9 @@ void _generateMessage(
       sb.writeln('      ${_writeScalarCall('w', kf.type, 'k')};');
       if (vf.type == _PbType.messageType) {
         sb.writeln(
-          '      final vSlot = w.reserveLenAuto(v.estimateBodyBytes());',
+          '      final vSlot = w.reserveLenAuto(v.estimateBodyBytes(2));',
         );
-        sb.writeln('      v.encodeInto(w);');
+        sb.writeln('      v.encodeInto(w, depth: 2);');
         sb.writeln('      w.patchLenAuto(vSlot);');
       } else {
         sb.writeln('      ${_writeScalarCall('w', vf.type, 'v')};');
@@ -870,7 +1289,7 @@ void _generateMessage(
       sb.writeln();
     } else if (f.label == 3) {
       final et = f.type == _PbType.messageType
-          ? _shortTypeName(f.typeName)
+          ? typeOf(f.typeName)
           : _dartScalarType(f.type);
       // Getter
       sb.writeln('  List<$et> get $fname {');
@@ -880,14 +1299,19 @@ void _generateMessage(
       sb.writeln('      if (p == null || p.isEmpty) return out;');
       sb.writeln('      return $className.decode(p).$fname;');
       sb.writeln('    }');
+      sb.writeln(
+        '    final budget = ob.DecodeBudget(ob.DecodeOptions.defaultMaxCollectionElements);',
+      );
       sb.writeln('    final occs = ob.findAllFields(rawBytes, ${f.number});');
       sb.writeln('    for (var i = 0; i < occs.length; i++) {');
       sb.writeln('      final (start, end, wt) = occs[i];');
       sb.writeln('      if (wt != ob.WireType.array) continue;');
       sb.writeln('      final r = ob.OmniBufReader(rawBytes, start, end);');
       sb.writeln('      final len = r.readCheckedLength();');
-      sb.writeln('      final body = r.subReader(r.pos, r.pos + len);');
+      sb.writeln('      final bodyEnd = r.pos + len;');
+      sb.writeln('      final body = r.subReader(r.pos, bodyEnd);');
       sb.writeln('      final (elemWt, count) = body.readArrayHeader();');
+      sb.writeln('      budget.consume(count);');
       sb.writeln('      if (elemWt != ${_wireTypeConst(f.type)}) {');
       sb.writeln(
         "        throw ob.OmniBufTypeMismatchException('${f.name} WireArray ElementType mismatch');",
@@ -896,19 +1320,24 @@ void _generateMessage(
       sb.writeln('      for (var j = 0; j < count; j++) {');
       if (f.type == _PbType.messageType) {
         sb.writeln('        final iLen = body.readCheckedLength();');
-        sb.writeln(
-          '        final iSub = body.subReader(body.pos, body.pos + iLen);',
-        );
+        sb.writeln('        final iEnd = body.pos + iLen;');
+        sb.writeln('        final iSub = body.subReader(body.pos, iEnd);');
         sb.writeln('        final item = $et();');
         sb.writeln(
-            '        item.decodeBody(iSub, 2, ob.DecodeOptions.defaults);');
-        sb.writeln('        body.pos += iLen;');
+          '        item.decodeBody(iSub, 2, ob.DecodeOptions.defaults, budget);',
+        );
+        sb.writeln('        body.pos = iEnd;');
         sb.writeln('        out.add(item);');
       } else {
         sb.writeln(
           '        out.add(${_readScalarExpr('body', f.type, inCollection: true)});',
         );
       }
+      sb.writeln('      }');
+      sb.writeln('      if (body.pos != bodyEnd) {');
+      sb.writeln(
+        "        throw const ob.OmniBufParseException('WireArray trailing bytes');",
+      );
       sb.writeln('      }');
       sb.writeln('    }');
       sb.writeln('    return out;');
@@ -929,9 +1358,9 @@ void _generateMessage(
       if (f.type == _PbType.messageType) {
         sb.writeln('      final item = value[i];');
         sb.writeln(
-          '      final iSlot = w.reserveLenAuto(item.estimateBodyBytes());',
+          '      final iSlot = w.reserveLenAuto(item.estimateBodyBytes(2));',
         );
-        sb.writeln('      item.encodeInto(w);');
+        sb.writeln('      item.encodeInto(w, depth: 2);');
         sb.writeln('      w.patchLenAuto(iSlot);');
       } else {
         sb.writeln('      ${_writeScalarCall('w', f.type, 'value[i]')};');
@@ -942,9 +1371,10 @@ void _generateMessage(
       sb.writeln('  }');
       sb.writeln();
     } else if (f.type == _PbType.messageType) {
-      final mt = _shortTypeName(f.typeName);
+      final mt = typeOf(f.typeName);
+      final omt = opaqueTypeOf(f.typeName);
       // Zero-decode Opaque submessage getter
-      sb.writeln('  Opaque$mt? get ${fname}Opaque {');
+      sb.writeln('  $omt? get ${fname}Opaque {');
       sb.writeln('    if (hasPatch(${f.number})) {');
       sb.writeln('      final p = getPatch(${f.number});');
       sb.writeln('      if (p == null || p.isEmpty) return null;');
@@ -952,7 +1382,7 @@ void _generateMessage(
       sb.writeln('      r.readTag();');
       sb.writeln('      final len = r.readCheckedLength();');
       sb.writeln(
-        '      return Opaque$mt(Uint8List.sublistView(p, r.pos, r.pos + len));',
+        '      return $omt(Uint8List.sublistView(p, r.pos, r.pos + len));',
       );
       sb.writeln('    }');
       sb.writeln('    final occs = ob.findAllFields(rawBytes, ${f.number});');
@@ -963,7 +1393,7 @@ void _generateMessage(
       sb.writeln('      final r = ob.OmniBufReader(rawBytes, start, end);');
       sb.writeln('      final len = r.readCheckedLength();');
       sb.writeln(
-        '      return Opaque$mt(Uint8List.sublistView(rawBytes, r.pos, r.pos + len));',
+        '      return $omt(Uint8List.sublistView(rawBytes, r.pos, r.pos + len));',
       );
       sb.writeln('    }');
       sb.writeln('    final w = ob.OmniBufWriter(64);');
@@ -976,7 +1406,7 @@ void _generateMessage(
       sb.writeln('      final len = r.readCheckedLength();');
       sb.writeln('      w.writeRawSlice(rawBytes, r.pos, r.pos + len);');
       sb.writeln('    }');
-      sb.writeln('    return found ? Opaque$mt(w.toBytes()) : null;');
+      sb.writeln('    return found ? $omt(w.toBytes()) : null;');
       sb.writeln('  }');
       sb.writeln();
       // Eager submessage getter
@@ -992,18 +1422,19 @@ void _generateMessage(
       sb.writeln('      setPatch(${f.number}, null);');
       sb.writeln('      return;');
       sb.writeln('    }');
-      sb.writeln('    final est = value.estimateBodyBytes();');
+      sb.writeln('    final est = value.estimateBodyBytes(1);');
       sb.writeln('    final w = ob.OmniBufWriter(est + 8);');
       sb.writeln('    w.writeTag(${f.number}, ob.WireType.subMsg);');
       sb.writeln('    final slot = w.reserveLenAuto(est);');
-      sb.writeln('    value.encodeInto(w);');
+      sb.writeln('    value.encodeInto(w, depth: 1);');
       sb.writeln('    w.patchLenAuto(slot);');
       sb.writeln('    setPatch(${f.number}, w.toBytes());');
       sb.writeln('  }');
       sb.writeln();
       // Opaque submessage setter
       sb.writeln(
-          '  void set${fname[0].toUpperCase()}${fname.substring(1)}Opaque(Opaque$mt value) {');
+        '  void set${fname[0].toUpperCase()}${fname.substring(1)}Opaque($omt value) {',
+      );
       sb.writeln('    final body = value.marshalAppend();');
       sb.writeln('    final w = ob.OmniBufWriter(body.length + 8);');
       sb.writeln('    w.writeTag(${f.number}, ob.WireType.subMsg);');
@@ -1028,7 +1459,8 @@ void _generateMessage(
         sb.writeln('      return wt == ob.WireType.boolTrue;');
       } else {
         sb.writeln(
-            '      if (wt != ${_wireTypeConst(f.type)}) return ${_defaultScalarExpr(f.type)};');
+          '      if (wt != ${_wireTypeConst(f.type)}) return ${_defaultScalarExpr(f.type)};',
+        );
         sb.writeln('      return ${_readScalarExpr('r', f.type)};');
       }
       sb.writeln('    }');
@@ -1042,7 +1474,8 @@ void _generateMessage(
           '    final hit = ob.findLastFieldWithWireType(rawBytes, ${f.number}, ${_wireTypeConst(f.type)});',
         );
         sb.writeln(
-            '    if (hit == null) return ${_defaultScalarExpr(f.type)};');
+          '    if (hit == null) return ${_defaultScalarExpr(f.type)};',
+        );
         sb.writeln('    final (start, end, _) = hit;');
         sb.writeln('    final r = ob.OmniBufReader(rawBytes, start, end);');
         sb.writeln('    return ${_readScalarExpr('r', f.type)};');

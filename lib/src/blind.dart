@@ -118,20 +118,27 @@ class _BlindMsg {
   }
 }
 
-class _BlindBudget {
-  final int maxElements;
-  int elements = 0;
-
-  _BlindBudget(this.maxElements);
-
-  void consume(int count) {
-    elements += count;
-    if (elements > maxElements) {
-      throw OmniBufAllocationLimitException(
-        'cumulative element count $elements exceeds limit $maxElements',
-      );
-    }
-  }
+/// Unifies two container shape signatures, treating a less-specific signature
+/// from an empty inner container (e.g. `A(13)`) as compatible with a
+/// more-specific signature (e.g. `A(13:A(0))`) and returning the more-specific
+/// signature. Returns `null` if the two signatures conflict.
+String? _unifyShapeSignature(String a, String b) {
+  if (a == b) return a;
+  if (a.length < 4 || b.length < 4 || a[0] != b[0]) return null;
+  final aBody = a.substring(2, a.length - 1);
+  final bBody = b.substring(2, b.length - 1);
+  final aColon = aBody.indexOf(':');
+  final bColon = bBody.indexOf(':');
+  final aHead = aColon >= 0 ? aBody.substring(0, aColon) : aBody;
+  final bHead = bColon >= 0 ? bBody.substring(0, bColon) : bBody;
+  if (aHead != bHead) return null;
+  if (aColon < 0) return b;
+  if (bColon < 0) return a;
+  final aInner = aBody.substring(aColon + 1);
+  final bInner = bBody.substring(bColon + 1);
+  final unifiedInner = _unifyShapeSignature(aInner, bInner);
+  if (unifiedInner == null) return null;
+  return '${a[0]}($aHead:$unifiedInner)';
 }
 
 /// Decodes an arbitrary OmniBuf packet without an external schema (Tier 4).
@@ -148,7 +155,7 @@ Map<String, Object?> decodeBlind(
       'packet size ${data.length} exceeds maxMessageBytes ${options.maxMessageBytes}',
     );
   }
-  final budget = _BlindBudget(options.maxCollectionElements);
+  final budget = DecodeBudget(options.maxCollectionElements);
   final r = OmniBufReader(data);
   final msg = _decodeBlindMsg(r, 0, options.maxDepth, budget);
   return msg.resolveNames(inheritedSchema);
@@ -197,7 +204,7 @@ _BlindMsg _decodeBlindMsg(
   OmniBufReader r,
   int depth,
   int maxDepth,
-  _BlindBudget budget,
+  DecodeBudget budget,
 ) {
   final msg = _BlindMsg();
   while (r.hasMore) {
@@ -210,11 +217,12 @@ _BlindMsg _decodeBlindMsg(
         depth,
         maxDepth,
         maxElements: budget.maxElements,
+        budget: budget,
       );
       if (msg.meta == null) {
         msg.meta = block;
       } else {
-        msg.meta!.mergeFrom(block);
+        msg.meta!.mergeFrom(block, preserveEmpty: true);
       }
       continue;
     }
@@ -228,6 +236,7 @@ _BlindMsg _decodeBlindMsg(
       r.pos += len;
       continue;
     }
+    budget.consume(1);
     final prevWt = msg.wireTypes[fnum];
     if (prevWt != null && !_sameLogicalWireType(prevWt, wt)) {
       throw OmniBufParseException(
@@ -238,12 +247,17 @@ _BlindMsg _decodeBlindMsg(
     if (wt == WireType.array) {
       final arr = rawVal as _BlindArrayResult;
       final prevSig = msg.shapeSignatures[fnum];
-      if (prevSig != null && prevSig != arr.signature) {
-        throw OmniBufParseException(
-          'WireArray shape change on field #$fnum: $prevSig -> ${arr.signature}',
-        );
+      if (prevSig != null) {
+        final unified = _unifyShapeSignature(prevSig, arr.signature);
+        if (unified == null) {
+          throw OmniBufParseException(
+            'WireArray shape change on field #$fnum: $prevSig -> ${arr.signature}',
+          );
+        }
+        msg.shapeSignatures[fnum] = unified;
+      } else {
+        msg.shapeSignatures[fnum] = arr.signature;
       }
-      msg.shapeSignatures[fnum] = arr.signature;
       if (prevWt != null) {
         (msg.fields[fnum] as List<Object?>).addAll(arr.items);
       } else {
@@ -255,12 +269,17 @@ _BlindMsg _decodeBlindMsg(
     if (wt == WireType.map) {
       final mapRes = rawVal as _BlindMapResult;
       final prevSig = msg.shapeSignatures[fnum];
-      if (prevSig != null && prevSig != mapRes.signature) {
-        throw OmniBufParseException(
-          'WireMap shape change on field #$fnum: $prevSig -> ${mapRes.signature}',
-        );
+      if (prevSig != null) {
+        final unified = _unifyShapeSignature(prevSig, mapRes.signature);
+        if (unified == null) {
+          throw OmniBufParseException(
+            'WireMap shape change on field #$fnum: $prevSig -> ${mapRes.signature}',
+          );
+        }
+        msg.shapeSignatures[fnum] = unified;
+      } else {
+        msg.shapeSignatures[fnum] = mapRes.signature;
       }
-      msg.shapeSignatures[fnum] = mapRes.signature;
       if (prevWt != null) {
         (msg.fields[fnum] as Map<String, Object?>).addAll(mapRes.entries);
       } else {
@@ -284,7 +303,7 @@ void _mergeBlindMsg(_BlindMsg dst, _BlindMsg src) {
     if (dst.meta == null) {
       dst.meta = src.meta!.clone();
     } else {
-      dst.meta!.mergeFrom(src.meta!);
+      dst.meta!.mergeFrom(src.meta!, preserveEmpty: true);
     }
   }
   for (final entry in src.fields.entries) {
@@ -299,10 +318,14 @@ void _mergeBlindMsg(_BlindMsg dst, _BlindMsg src) {
     if (prevWt != null) {
       final prevSig = dst.shapeSignatures[fnum];
       final srcSig = src.shapeSignatures[fnum];
-      if (prevSig != null && srcSig != null && prevSig != srcSig) {
-        throw OmniBufParseException(
-          'container shape change on merged field #$fnum: $prevSig -> $srcSig',
-        );
+      if (prevSig != null && srcSig != null) {
+        final unified = _unifyShapeSignature(prevSig, srcSig);
+        if (unified == null) {
+          throw OmniBufParseException(
+            'container shape change on merged field #$fnum: $prevSig -> $srcSig',
+          );
+        }
+        dst.shapeSignatures[fnum] = unified;
       }
       if (wt == WireType.array) {
         (dst.fields[fnum] as List<Object?>)
@@ -332,7 +355,7 @@ Object? _decodeBlindValue(
   int wt,
   int depth,
   int maxDepth,
-  _BlindBudget budget,
+  DecodeBudget budget,
   bool inCollection,
 ) {
   switch (wt) {
@@ -405,20 +428,30 @@ Object? _decodeBlindValue(
         final item = _decodeBlindValue(
             body, elemType, nextDepth, maxDepth, budget, true);
         if (item is _BlindArrayResult) {
-          if (innerSig != null && innerSig != item.signature) {
-            throw const OmniBufParseException(
-              'nested WireArray inner ElementType conflict',
-            );
+          if (innerSig != null) {
+            final unified = _unifyShapeSignature(innerSig, item.signature);
+            if (unified == null) {
+              throw const OmniBufParseException(
+                'nested WireArray inner ElementType conflict',
+              );
+            }
+            innerSig = unified;
+          } else {
+            innerSig = item.signature;
           }
-          innerSig = item.signature;
           list.add(item.items);
         } else if (item is _BlindMapResult) {
-          if (innerSig != null && innerSig != item.signature) {
-            throw const OmniBufParseException(
-              'nested WireMap inner type conflict',
-            );
+          if (innerSig != null) {
+            final unified = _unifyShapeSignature(innerSig, item.signature);
+            if (unified == null) {
+              throw const OmniBufParseException(
+                'nested WireMap inner type conflict',
+              );
+            }
+            innerSig = unified;
+          } else {
+            innerSig = item.signature;
           }
-          innerSig = item.signature;
           list.add(item.entries);
         } else {
           list.add(item);
@@ -458,20 +491,30 @@ Object? _decodeBlindValue(
         final val =
             _decodeBlindValue(body, valType, nextDepth, maxDepth, budget, true);
         if (val is _BlindArrayResult) {
-          if (valInnerSig != null && valInnerSig != val.signature) {
-            throw const OmniBufParseException(
-              'nested WireMap value array type conflict',
-            );
+          if (valInnerSig != null) {
+            final unified = _unifyShapeSignature(valInnerSig, val.signature);
+            if (unified == null) {
+              throw const OmniBufParseException(
+                'nested WireMap value array type conflict',
+              );
+            }
+            valInnerSig = unified;
+          } else {
+            valInnerSig = val.signature;
           }
-          valInnerSig = val.signature;
           map[keyStr] = val.items;
         } else if (val is _BlindMapResult) {
-          if (valInnerSig != null && valInnerSig != val.signature) {
-            throw const OmniBufParseException(
-              'nested WireMap value map type conflict',
-            );
+          if (valInnerSig != null) {
+            final unified = _unifyShapeSignature(valInnerSig, val.signature);
+            if (unified == null) {
+              throw const OmniBufParseException(
+                'nested WireMap value map type conflict',
+              );
+            }
+            valInnerSig = unified;
+          } else {
+            valInnerSig = val.signature;
           }
-          valInnerSig = val.signature;
           map[keyStr] = val.entries;
         } else {
           map[keyStr] = val;

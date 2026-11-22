@@ -160,10 +160,24 @@ class OmniBufSchema<T> {
     T msg, {
     EncodeOptions options = EncodeOptions.defaults,
   }) {
+    _encodeInto(w, msg, options, 0);
+  }
+
+  void _encodeInto(
+    OmniBufWriter w,
+    T msg,
+    EncodeOptions options,
+    int depth,
+  ) {
+    if (depth > DecodeOptions.defaultMaxDepth) {
+      throw const OmniBufSerializeException(
+        'message encoding depth exceeded limit of ${DecodeOptions.defaultMaxDepth}',
+      );
+    }
     for (final f in _sortedFields) {
       final val = f.get(msg);
       if (val == null) continue;
-      _encodeField(w, f, val, options);
+      _encodeField(w, f, val, options, depth);
     }
   }
 
@@ -172,6 +186,7 @@ class OmniBufSchema<T> {
     OmniFieldDef<T> f,
     Object val,
     EncodeOptions options,
+    int depth,
   ) {
     switch (f.kind) {
       case OmniFieldKind.uint32:
@@ -254,7 +269,7 @@ class OmniBufSchema<T> {
         final sub = f.subSchema!();
         w.writeTag(f.id, WireType.subMsg);
         final slot = w.reserveLen2();
-        sub.encodeInto(w, val, options: options);
+        sub._encodeInto(w, val, options, depth + 1);
         w.patchLen2(slot);
       case OmniFieldKind.repeated:
         final list = val as List<dynamic>;
@@ -266,7 +281,14 @@ class OmniBufSchema<T> {
         w.writeByte(elemWt);
         w.writeVarint(list.length);
         for (final item in list) {
-          _writeCollectionValue(w, elemKind, item, f.subSchema, options);
+          _writeCollectionValue(
+            w,
+            elemKind,
+            item,
+            f.subSchema,
+            options,
+            depth + 1,
+          );
         }
         w.patchLen2(slot);
       case OmniFieldKind.map:
@@ -286,8 +308,15 @@ class OmniBufSchema<T> {
         }
         w.writeVarint(keys.length);
         for (final k in keys) {
-          _writeCollectionValue(w, kKind, k, null, options);
-          _writeCollectionValue(w, vKind, map[k], f.subSchema, options);
+          _writeCollectionValue(w, kKind, k, null, options, depth + 1);
+          _writeCollectionValue(
+            w,
+            vKind,
+            map[k],
+            f.subSchema,
+            options,
+            depth + 1,
+          );
         }
         w.patchLen2(slot);
     }
@@ -315,8 +344,9 @@ class OmniBufSchema<T> {
     if (!options.merge) {
       _resetMessage(dst);
     }
+    final budget = DecodeBudget(options.maxCollectionElements);
     final r = OmniBufReader(data);
-    _decodeBody(r, dst, 0, options);
+    _decodeBody(r, dst, 0, options, budget);
   }
 
   void _resetMessage(T dst) {
@@ -347,9 +377,27 @@ class OmniBufSchema<T> {
         case OmniFieldKind.message:
           f.set(dst, null);
         case OmniFieldKind.repeated:
-          f.set(dst, <dynamic>[]);
+          final existing = f.get(dst);
+          if (existing is List) {
+            try {
+              existing.clear();
+            } on UnsupportedError {
+              f.set(dst, <dynamic>[]);
+            }
+          } else {
+            f.set(dst, <dynamic>[]);
+          }
         case OmniFieldKind.map:
-          f.set(dst, <dynamic, dynamic>{});
+          final existing = f.get(dst);
+          if (existing is Map) {
+            try {
+              existing.clear();
+            } on UnsupportedError {
+              f.set(dst, <dynamic, dynamic>{});
+            }
+          } else {
+            f.set(dst, <dynamic, dynamic>{});
+          }
       }
     }
   }
@@ -359,13 +407,20 @@ class OmniBufSchema<T> {
     T dst,
     int depth,
     DecodeOptions options,
+    DecodeBudget budget,
   ) {
     while (r.hasMore) {
       final tag = r.readTag();
       final fnum = tag >> 4;
       final wt = tag & 0x0F;
       if (fnum == 0) {
-        validateField0SubMsg(r, depth, options.maxDepth);
+        validateField0SubMsg(
+          r,
+          depth,
+          options.maxDepth,
+          maxElements: options.maxCollectionElements,
+          budget: budget,
+        );
         continue;
       }
       final f = _byId[fnum];
@@ -376,6 +431,7 @@ class OmniBufSchema<T> {
           depth,
           options.maxDepth,
           maxElements: options.maxCollectionElements,
+          budget: budget,
         );
         continue;
       }
@@ -387,10 +443,11 @@ class OmniBufSchema<T> {
           depth,
           options.maxDepth,
           maxElements: options.maxCollectionElements,
+          budget: budget,
         );
         continue;
       }
-      _decodeField(r, dst, f, wt, depth, options);
+      _decodeField(r, dst, f, wt, depth, options, budget);
     }
   }
 
@@ -401,6 +458,7 @@ class OmniBufSchema<T> {
     int wt,
     int depth,
     DecodeOptions options,
+    DecodeBudget budget,
   ) {
     switch (f.kind) {
       case OmniFieldKind.uint32:
@@ -443,7 +501,7 @@ class OmniBufSchema<T> {
           subObj = subSchema.create();
           f.set(dst, subObj);
         }
-        subSchema._decodeBody(subReader, subObj, nextDepth, options);
+        subSchema._decodeBody(subReader, subObj, nextDepth, options, budget);
         r.pos = subEnd;
       case OmniFieldKind.repeated:
         final nextDepth = depth + 1;
@@ -456,6 +514,7 @@ class OmniBufSchema<T> {
         final (elemWt, count) = body.readArrayHeader(
           maxElements: options.maxCollectionElements,
         );
+        budget.consume(count);
         final expectedElemWt = wireTypeForKind(f.elementKind!);
         if (elemWt != expectedElemWt) {
           throw OmniBufTypeMismatchException(
@@ -473,6 +532,7 @@ class OmniBufSchema<T> {
               f.subSchema,
               nextDepth,
               options,
+              budget,
             ),
           );
         }
@@ -491,6 +551,7 @@ class OmniBufSchema<T> {
         final (kWt, vWt, count) = body.readMapHeader(
           maxElements: options.maxCollectionElements,
         );
+        budget.consume(count);
         final expectedKWt = wireTypeForKind(f.keyKind!);
         final expectedVWt = wireTypeForKind(f.valueKind!);
         if (kWt != expectedKWt || vWt != expectedVWt) {
@@ -508,6 +569,7 @@ class OmniBufSchema<T> {
             null,
             nextDepth,
             options,
+            budget,
           );
           final v = _readCollectionValue(
             body,
@@ -515,6 +577,7 @@ class OmniBufSchema<T> {
             f.subSchema,
             nextDepth,
             options,
+            budget,
           );
           map[k] = v;
         }
@@ -547,6 +610,7 @@ void _writeCollectionValue(
   Object? val,
   OmniBufSchema<dynamic> Function()? subSchema,
   EncodeOptions options,
+  int depth,
 ) {
   switch (kind) {
     case OmniFieldKind.uint32:
@@ -579,7 +643,7 @@ void _writeCollectionValue(
       final schema = subSchema!();
       final slot = w.reserveLen2();
       if (val != null) {
-        schema.encodeInto(w, val, options: options);
+        schema._encodeInto(w, val, options, depth + 1);
       }
       w.patchLen2(slot);
     case OmniFieldKind.repeated:
@@ -596,6 +660,7 @@ Object? _readCollectionValue(
   OmniBufSchema<dynamic> Function()? subSchema,
   int depth,
   DecodeOptions options,
+  DecodeBudget budget,
 ) {
   switch (kind) {
     case OmniFieldKind.uint32:
@@ -634,7 +699,7 @@ Object? _readCollectionValue(
       final subReader = r.subReader(r.pos, subEnd);
       final schema = subSchema!();
       final obj = schema.create();
-      schema._decodeBody(subReader, obj, nextDepth, options);
+      schema._decodeBody(subReader, obj, nextDepth, options, budget);
       r.pos = subEnd;
       return obj;
     case OmniFieldKind.repeated:
@@ -648,14 +713,24 @@ void _sortMapKeys(List<dynamic> keys, OmniFieldKind keyKind) {
     case OmniFieldKind.string:
       keys.sort((a, b) => compareUtf8(a as String, b as String));
     case OmniFieldKind.uint32:
-    case OmniFieldKind.uint64:
     case OmniFieldKind.fixed32:
+      keys.sort(
+        (a, b) => (_toInt(a as Object) & 0xFFFFFFFF)
+            .compareTo(_toInt(b as Object) & 0xFFFFFFFF),
+      );
+    case OmniFieldKind.uint64:
     case OmniFieldKind.fixed64:
       keys.sort(
-          (a, b) => compareUint64(_toInt(a as Object), _toInt(b as Object)));
+        (a, b) => compareUint64(_toInt(a as Object), _toInt(b as Object)),
+      );
     case OmniFieldKind.sint32:
-    case OmniFieldKind.sint64:
     case OmniFieldKind.sfixed32:
+      keys.sort(
+        (a, b) => _toInt(a as Object)
+            .toSigned(32)
+            .compareTo(_toInt(b as Object).toSigned(32)),
+      );
+    case OmniFieldKind.sint64:
     case OmniFieldKind.sfixed64:
       keys.sort((a, b) => _toInt(a as Object).compareTo(_toInt(b as Object)));
     case OmniFieldKind.boolType:

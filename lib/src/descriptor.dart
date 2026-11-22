@@ -12,6 +12,7 @@ import 'dart:typed_data';
 class ProtoFileDescriptor {
   String name = '';
   String packageName = '';
+  final List<String> dependencies = [];
   final List<ProtoMessageDescriptor> messages = [];
   final List<ProtoEnumDescriptor> enums = [];
 }
@@ -123,6 +124,8 @@ ProtoFileDescriptor _decodeFileDescriptor(Uint8List bytes) {
         fd.name = r.readString();
       case 2:
         fd.packageName = r.readString();
+      case 3:
+        fd.dependencies.add(r.readString());
       case 4:
         fd.messages.add(_decodeMessageDescriptor(r.readBytes()));
       case 5:
@@ -243,16 +246,22 @@ class _PbReader {
     var result = 0;
     var shift = 0;
     while (pos < buf.length) {
+      if (shift >= 64) {
+        throw const FormatException('protobuf varint overflow');
+      }
       final b = buf[pos++];
       result |= (b & 0x7F) << shift;
       if ((b & 0x80) == 0) return result;
       shift += 7;
     }
-    throw FormatException('truncated protobuf varint');
+    throw const FormatException('truncated protobuf varint');
   }
 
   Uint8List readBytes() {
     final len = readVarint();
+    if (len < 0 || len > buf.length - pos) {
+      throw const FormatException('protobuf length exceeds buffer bounds');
+    }
     final end = pos + len;
     final slice = Uint8List.sublistView(buf, pos, end);
     pos = end;
@@ -266,11 +275,20 @@ class _PbReader {
       case 0:
         readVarint();
       case 1:
+        if (8 > buf.length - pos) {
+          throw const FormatException('truncated protobuf fixed64');
+        }
         pos += 8;
       case 2:
         final len = readVarint();
+        if (len < 0 || len > buf.length - pos) {
+          throw const FormatException('protobuf length exceeds buffer bounds');
+        }
         pos += len;
       case 5:
+        if (4 > buf.length - pos) {
+          throw const FormatException('truncated protobuf fixed32');
+        }
         pos += 4;
       default:
         throw FormatException('unsupported protobuf wire type $wt');

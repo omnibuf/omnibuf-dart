@@ -1,6 +1,6 @@
 // GENERATED CODE - DO NOT MODIFY BY HAND.
 // Source: omnibuf/bench/peer.proto
-// ignore_for_file: unused_import, constant_identifier_names, non_constant_identifier_names, prefer_final_locals
+// ignore_for_file: unused_import, constant_identifier_names, non_constant_identifier_names, prefer_final_locals, unnecessary_this, camel_case_types
 
 import 'dart:typed_data';
 
@@ -24,19 +24,23 @@ class Location {
   });
 
   void reset() {
-    region = '';
-    datacenter = '';
-    city = '';
-    rack = 0;
-    latitude = 0.0;
-    longitude = 0.0;
+    this.region = '';
+    this.datacenter = '';
+    this.city = '';
+    this.rack = 0;
+    this.latitude = 0.0;
+    this.longitude = 0.0;
   }
 
-  int estimateBodyBytes() {
+  int estimateBodyBytes([int depth = 0]) {
+    if (depth > ob.DecodeOptions.defaultMaxDepth) {
+      throw const ob.OmniBufSerializeException(
+          'message encoding depth exceeded limit of ${ob.DecodeOptions.defaultMaxDepth}');
+    }
     var n = 32;
-    n += region.length;
-    n += datacenter.length;
-    n += city.length;
+    n += this.region.length;
+    n += this.datacenter.length;
+    n += this.city.length;
     return n;
   }
 
@@ -69,30 +73,34 @@ class Location {
   }
 
   void encodeInto(ob.OmniBufWriter w,
-      {ob.EncodeOptions options = ob.EncodeOptions.defaults}) {
-    if (region.isNotEmpty) {
+      {ob.EncodeOptions options = ob.EncodeOptions.defaults, int depth = 0}) {
+    if (depth > ob.DecodeOptions.defaultMaxDepth) {
+      throw const ob.OmniBufSerializeException(
+          'message encoding depth exceeded limit of ${ob.DecodeOptions.defaultMaxDepth}');
+    }
+    if (this.region.isNotEmpty) {
       w.writeTag(1, ob.WireType.string);
-      w.writeString(region);
+      w.writeString(this.region);
     }
-    if (datacenter.isNotEmpty) {
+    if (this.datacenter.isNotEmpty) {
       w.writeTag(2, ob.WireType.string);
-      w.writeString(datacenter);
+      w.writeString(this.datacenter);
     }
-    if (city.isNotEmpty) {
+    if (this.city.isNotEmpty) {
       w.writeTag(3, ob.WireType.string);
-      w.writeString(city);
+      w.writeString(this.city);
     }
-    if (rack != 0) {
+    if (this.rack != 0) {
       w.writeTag(4, ob.WireType.uint);
-      w.writeVarint(rack & 0xFFFFFFFF);
+      w.writeVarint(this.rack & 0xFFFFFFFF);
     }
-    if (latitude != 0.0 || latitude.isNegative) {
+    if (this.latitude != 0.0 || this.latitude.isNegative) {
       w.writeTag(5, ob.WireType.float32);
-      w.writeFloat32(latitude);
+      w.writeFloat32(this.latitude);
     }
-    if (longitude != 0.0 || longitude.isNegative) {
+    if (this.longitude != 0.0 || this.longitude.isNegative) {
       w.writeTag(6, ob.WireType.float32);
-      w.writeFloat32(longitude);
+      w.writeFloat32(this.longitude);
     }
   }
 
@@ -112,65 +120,76 @@ class Location {
     if (!options.merge) {
       reset();
     }
+    final budget = ob.DecodeBudget(options.maxCollectionElements);
     final r = ob.OmniBufReader(data);
-    decodeBody(r, 0, options);
+    decodeBody(r, 0, options, budget);
   }
 
-  void decodeBody(ob.OmniBufReader r, int depth, ob.DecodeOptions options) {
+  void decodeBody(ob.OmniBufReader r, int depth, ob.DecodeOptions options,
+      [ob.DecodeBudget? budget]) {
+    final activeBudget =
+        budget ?? ob.DecodeBudget(options.maxCollectionElements);
     while (r.hasMore) {
       final tag = r.readTag();
       final fnum = tag >> 4;
       final wt = tag & 0x0F;
       if (fnum == 0) {
-        ob.validateField0SubMsg(r, depth, options.maxDepth);
+        ob.validateField0SubMsg(r, depth, options.maxDepth,
+            maxElements: options.maxCollectionElements, budget: activeBudget);
         continue;
       }
       switch (fnum) {
         case 1:
           if (wt != ob.WireType.string) {
             ob.skipAndValidateValue(r, wt, depth, options.maxDepth,
-                maxElements: options.maxCollectionElements);
+                maxElements: options.maxCollectionElements,
+                budget: activeBudget);
             break;
           }
-          region = r.readString();
+          this.region = r.readString();
         case 2:
           if (wt != ob.WireType.string) {
             ob.skipAndValidateValue(r, wt, depth, options.maxDepth,
-                maxElements: options.maxCollectionElements);
+                maxElements: options.maxCollectionElements,
+                budget: activeBudget);
             break;
           }
-          datacenter = r.readString();
+          this.datacenter = r.readString();
         case 3:
           if (wt != ob.WireType.string) {
             ob.skipAndValidateValue(r, wt, depth, options.maxDepth,
-                maxElements: options.maxCollectionElements);
+                maxElements: options.maxCollectionElements,
+                budget: activeBudget);
             break;
           }
-          city = r.readString();
+          this.city = r.readString();
         case 4:
           if (wt != ob.WireType.uint) {
             ob.skipAndValidateValue(r, wt, depth, options.maxDepth,
-                maxElements: options.maxCollectionElements);
+                maxElements: options.maxCollectionElements,
+                budget: activeBudget);
             break;
           }
-          rack = r.readUint32();
+          this.rack = r.readUint32();
         case 5:
           if (wt != ob.WireType.float32) {
             ob.skipAndValidateValue(r, wt, depth, options.maxDepth,
-                maxElements: options.maxCollectionElements);
+                maxElements: options.maxCollectionElements,
+                budget: activeBudget);
             break;
           }
-          latitude = r.readFloat32();
+          this.latitude = r.readFloat32();
         case 6:
           if (wt != ob.WireType.float32) {
             ob.skipAndValidateValue(r, wt, depth, options.maxDepth,
-                maxElements: options.maxCollectionElements);
+                maxElements: options.maxCollectionElements,
+                budget: activeBudget);
             break;
           }
-          longitude = r.readFloat32();
+          this.longitude = r.readFloat32();
         default:
           ob.skipAndValidateValue(r, wt, depth, options.maxDepth,
-              maxElements: options.maxCollectionElements);
+              maxElements: options.maxCollectionElements, budget: activeBudget);
       }
     }
   }
@@ -362,15 +381,19 @@ class Neighbor {
   });
 
   void reset() {
-    peerAsn = 0;
-    router = '';
-    latencyUs = 0;
-    established = false;
+    this.peerAsn = 0;
+    this.router = '';
+    this.latencyUs = 0;
+    this.established = false;
   }
 
-  int estimateBodyBytes() {
+  int estimateBodyBytes([int depth = 0]) {
+    if (depth > ob.DecodeOptions.defaultMaxDepth) {
+      throw const ob.OmniBufSerializeException(
+          'message encoding depth exceeded limit of ${ob.DecodeOptions.defaultMaxDepth}');
+    }
     var n = 32;
-    n += router.length;
+    n += this.router.length;
     return n;
   }
 
@@ -401,20 +424,24 @@ class Neighbor {
   }
 
   void encodeInto(ob.OmniBufWriter w,
-      {ob.EncodeOptions options = ob.EncodeOptions.defaults}) {
-    if (peerAsn != 0) {
+      {ob.EncodeOptions options = ob.EncodeOptions.defaults, int depth = 0}) {
+    if (depth > ob.DecodeOptions.defaultMaxDepth) {
+      throw const ob.OmniBufSerializeException(
+          'message encoding depth exceeded limit of ${ob.DecodeOptions.defaultMaxDepth}');
+    }
+    if (this.peerAsn != 0) {
       w.writeTag(1, ob.WireType.uint);
-      w.writeVarint(peerAsn & 0xFFFFFFFF);
+      w.writeVarint(this.peerAsn & 0xFFFFFFFF);
     }
-    if (router.isNotEmpty) {
+    if (this.router.isNotEmpty) {
       w.writeTag(2, ob.WireType.string);
-      w.writeString(router);
+      w.writeString(this.router);
     }
-    if (latencyUs != 0) {
+    if (this.latencyUs != 0) {
       w.writeTag(3, ob.WireType.uint);
-      w.writeVarint(latencyUs & 0xFFFFFFFF);
+      w.writeVarint(this.latencyUs & 0xFFFFFFFF);
     }
-    if (established) {
+    if (this.established) {
       w.writeTag(4, ob.WireType.boolTrue);
     }
   }
@@ -435,51 +462,60 @@ class Neighbor {
     if (!options.merge) {
       reset();
     }
+    final budget = ob.DecodeBudget(options.maxCollectionElements);
     final r = ob.OmniBufReader(data);
-    decodeBody(r, 0, options);
+    decodeBody(r, 0, options, budget);
   }
 
-  void decodeBody(ob.OmniBufReader r, int depth, ob.DecodeOptions options) {
+  void decodeBody(ob.OmniBufReader r, int depth, ob.DecodeOptions options,
+      [ob.DecodeBudget? budget]) {
+    final activeBudget =
+        budget ?? ob.DecodeBudget(options.maxCollectionElements);
     while (r.hasMore) {
       final tag = r.readTag();
       final fnum = tag >> 4;
       final wt = tag & 0x0F;
       if (fnum == 0) {
-        ob.validateField0SubMsg(r, depth, options.maxDepth);
+        ob.validateField0SubMsg(r, depth, options.maxDepth,
+            maxElements: options.maxCollectionElements, budget: activeBudget);
         continue;
       }
       switch (fnum) {
         case 1:
           if (wt != ob.WireType.uint) {
             ob.skipAndValidateValue(r, wt, depth, options.maxDepth,
-                maxElements: options.maxCollectionElements);
+                maxElements: options.maxCollectionElements,
+                budget: activeBudget);
             break;
           }
-          peerAsn = r.readUint32();
+          this.peerAsn = r.readUint32();
         case 2:
           if (wt != ob.WireType.string) {
             ob.skipAndValidateValue(r, wt, depth, options.maxDepth,
-                maxElements: options.maxCollectionElements);
+                maxElements: options.maxCollectionElements,
+                budget: activeBudget);
             break;
           }
-          router = r.readString();
+          this.router = r.readString();
         case 3:
           if (wt != ob.WireType.uint) {
             ob.skipAndValidateValue(r, wt, depth, options.maxDepth,
-                maxElements: options.maxCollectionElements);
+                maxElements: options.maxCollectionElements,
+                budget: activeBudget);
             break;
           }
-          latencyUs = r.readUint32();
+          this.latencyUs = r.readUint32();
         case 4:
           if (wt != ob.WireType.boolFalse && wt != ob.WireType.boolTrue) {
             ob.skipAndValidateValue(r, wt, depth, options.maxDepth,
-                maxElements: options.maxCollectionElements);
+                maxElements: options.maxCollectionElements,
+                budget: activeBudget);
             break;
           }
-          established = wt == ob.WireType.boolTrue;
+          this.established = wt == ob.WireType.boolTrue;
         default:
           ob.skipAndValidateValue(r, wt, depth, options.maxDepth,
-              maxElements: options.maxCollectionElements);
+              maxElements: options.maxCollectionElements, budget: activeBudget);
       }
     }
   }
@@ -621,33 +657,37 @@ class PeerUpdate {
     this.location,
     List<Neighbor>? neighbors,
     this.sequence = 0,
-  })  : tags = tags ?? <String>[],
-        prefixes = prefixes ?? <int>[],
-        neighbors = neighbors ?? <Neighbor>[];
+  })  : this.tags = tags ?? <String>[],
+        this.prefixes = prefixes ?? <int>[],
+        this.neighbors = neighbors ?? <Neighbor>[];
 
   void reset() {
-    asn = 0;
-    routerId = '';
-    active = false;
-    uptimeSec = 0;
-    rssiDbm = 0;
-    cpuLoad = 0.0;
-    tags.clear();
-    prefixes.clear();
-    location = null;
-    neighbors.clear();
-    sequence = 0;
+    this.asn = 0;
+    this.routerId = '';
+    this.active = false;
+    this.uptimeSec = 0;
+    this.rssiDbm = 0;
+    this.cpuLoad = 0.0;
+    this.tags.clear();
+    this.prefixes.clear();
+    this.location = null;
+    this.neighbors.clear();
+    this.sequence = 0;
   }
 
-  int estimateBodyBytes() {
-    var n = 32;
-    n += routerId.length;
-    for (var i = 0; i < tags.length; i++) {
-      n += tags[i].length + 4;
+  int estimateBodyBytes([int depth = 0]) {
+    if (depth > ob.DecodeOptions.defaultMaxDepth) {
+      throw const ob.OmniBufSerializeException(
+          'message encoding depth exceeded limit of ${ob.DecodeOptions.defaultMaxDepth}');
     }
-    if (location != null) n += location!.estimateBodyBytes();
-    for (var i = 0; i < neighbors.length; i++) {
-      n += neighbors[i].estimateBodyBytes();
+    var n = 32;
+    n += this.routerId.length;
+    for (var i = 0; i < this.tags.length; i++) {
+      n += this.tags[i].length + 4;
+    }
+    if (this.location != null) n += this.location!.estimateBodyBytes(depth + 1);
+    for (var i = 0; i < this.neighbors.length; i++) {
+      n += this.neighbors[i].estimateBodyBytes(depth + 2);
     }
     return n;
   }
@@ -672,8 +712,8 @@ class PeerUpdate {
     };
     final children = <int, ob.SchemaMeta>{};
     if (depth + 2 <= maxDepth) {
-      children[9] = Location._buildSchemaMeta(depth + 2, maxDepth);
-      children[10] = Neighbor._buildSchemaMeta(depth + 2, maxDepth);
+      children[9] = Location.buildSchemaMeta(maxDepth: maxDepth - depth - 2);
+      children[10] = Neighbor.buildSchemaMeta(maxDepth: maxDepth - depth - 2);
     }
     return ob.SchemaMeta(
         typeName: 'omnibuf.bench.PeerUpdate',
@@ -691,77 +731,81 @@ class PeerUpdate {
   }
 
   void encodeInto(ob.OmniBufWriter w,
-      {ob.EncodeOptions options = ob.EncodeOptions.defaults}) {
-    if (asn != 0) {
+      {ob.EncodeOptions options = ob.EncodeOptions.defaults, int depth = 0}) {
+    if (depth > ob.DecodeOptions.defaultMaxDepth) {
+      throw const ob.OmniBufSerializeException(
+          'message encoding depth exceeded limit of ${ob.DecodeOptions.defaultMaxDepth}');
+    }
+    if (this.asn != 0) {
       w.writeTag(1, ob.WireType.uint);
-      w.writeVarint(asn & 0xFFFFFFFF);
+      w.writeVarint(this.asn & 0xFFFFFFFF);
     }
-    if (routerId.isNotEmpty) {
+    if (this.routerId.isNotEmpty) {
       w.writeTag(2, ob.WireType.string);
-      w.writeString(routerId);
+      w.writeString(this.routerId);
     }
-    if (active) {
+    if (this.active) {
       w.writeTag(3, ob.WireType.boolTrue);
     }
-    if (uptimeSec != 0) {
+    if (this.uptimeSec != 0) {
       w.writeTag(4, ob.WireType.uint);
-      w.writeVarint(uptimeSec);
+      w.writeVarint(this.uptimeSec);
     }
-    if (rssiDbm != 0) {
+    if (this.rssiDbm != 0) {
       w.writeTag(5, ob.WireType.sint);
-      w.writeSint32(rssiDbm);
+      w.writeSint32(this.rssiDbm);
     }
-    if (cpuLoad != 0.0 || cpuLoad.isNegative) {
+    if (this.cpuLoad != 0.0 || this.cpuLoad.isNegative) {
       w.writeTag(6, ob.WireType.float64);
-      w.writeFloat64(cpuLoad);
+      w.writeFloat64(this.cpuLoad);
     }
-    if (tags.isNotEmpty) {
+    if (this.tags.isNotEmpty) {
       w.writeTag(7, ob.WireType.array);
       final slot = w.reserveLen2();
       w.writeByte(ob.WireType.string);
-      w.writeVarint(tags.length);
-      for (var i = 0; i < tags.length; i++) {
-        w.writeString(tags[i]);
+      w.writeVarint(this.tags.length);
+      for (var i = 0; i < this.tags.length; i++) {
+        w.writeString(this.tags[i]);
       }
       w.patchLen2(slot);
     }
-    if (prefixes.isNotEmpty) {
+    if (this.prefixes.isNotEmpty) {
       w.writeTag(8, ob.WireType.array);
       final slot = w.reserveLen2();
       w.writeByte(ob.WireType.uint);
-      w.writeVarint(prefixes.length);
-      for (var i = 0; i < prefixes.length; i++) {
-        w.writeVarint(prefixes[i] & 0xFFFFFFFF);
+      w.writeVarint(this.prefixes.length);
+      for (var i = 0; i < this.prefixes.length; i++) {
+        w.writeVarint(this.prefixes[i] & 0xFFFFFFFF);
       }
       w.patchLen2(slot);
     }
-    if (location != null) {
-      final sub = location!;
+    if (this.location != null) {
+      final sub = this.location!;
       w.writeTag(9, ob.WireType.subMsg);
-      final slot = w.reserveLenAuto(sub.estimateBodyBytes());
-      sub.encodeInto(w, options: options);
+      final slot = w.reserveLenAuto(sub.estimateBodyBytes(depth + 1));
+      sub.encodeInto(w, options: options, depth: depth + 1);
       w.patchLenAuto(slot);
     }
-    if (neighbors.isNotEmpty) {
+    if (this.neighbors.isNotEmpty) {
       w.writeTag(10, ob.WireType.array);
       var est = 8;
-      for (var i = 0; i < neighbors.length; i++) {
-        est += neighbors[i].estimateBodyBytes();
+      for (var i = 0; i < this.neighbors.length; i++) {
+        est += this.neighbors[i].estimateBodyBytes(depth + 2);
       }
       final slot = w.reserveLenAuto(est);
       w.writeByte(ob.WireType.subMsg);
-      w.writeVarint(neighbors.length);
-      for (var i = 0; i < neighbors.length; i++) {
-        final item = neighbors[i];
-        final iSlot = w.reserveLenAuto(item.estimateBodyBytes());
-        item.encodeInto(w, options: options);
+      w.writeVarint(this.neighbors.length);
+      for (var i = 0; i < this.neighbors.length; i++) {
+        final item = this.neighbors[i];
+        final iSlot = w.reserveLenAuto(item.estimateBodyBytes(depth + 2));
+        item.encodeInto(w, options: options, depth: depth + 2);
         w.patchLenAuto(iSlot);
       }
       w.patchLenAuto(slot);
     }
-    if (sequence != 0) {
+    if (this.sequence != 0) {
       w.writeTag(11, ob.WireType.uint);
-      w.writeVarint(sequence);
+      w.writeVarint(this.sequence);
     }
   }
 
@@ -781,66 +825,78 @@ class PeerUpdate {
     if (!options.merge) {
       reset();
     }
+    final budget = ob.DecodeBudget(options.maxCollectionElements);
     final r = ob.OmniBufReader(data);
-    decodeBody(r, 0, options);
+    decodeBody(r, 0, options, budget);
   }
 
-  void decodeBody(ob.OmniBufReader r, int depth, ob.DecodeOptions options) {
+  void decodeBody(ob.OmniBufReader r, int depth, ob.DecodeOptions options,
+      [ob.DecodeBudget? budget]) {
+    final activeBudget =
+        budget ?? ob.DecodeBudget(options.maxCollectionElements);
     while (r.hasMore) {
       final tag = r.readTag();
       final fnum = tag >> 4;
       final wt = tag & 0x0F;
       if (fnum == 0) {
-        ob.validateField0SubMsg(r, depth, options.maxDepth);
+        ob.validateField0SubMsg(r, depth, options.maxDepth,
+            maxElements: options.maxCollectionElements, budget: activeBudget);
         continue;
       }
       switch (fnum) {
         case 1:
           if (wt != ob.WireType.uint) {
             ob.skipAndValidateValue(r, wt, depth, options.maxDepth,
-                maxElements: options.maxCollectionElements);
+                maxElements: options.maxCollectionElements,
+                budget: activeBudget);
             break;
           }
-          asn = r.readUint32();
+          this.asn = r.readUint32();
         case 2:
           if (wt != ob.WireType.string) {
             ob.skipAndValidateValue(r, wt, depth, options.maxDepth,
-                maxElements: options.maxCollectionElements);
+                maxElements: options.maxCollectionElements,
+                budget: activeBudget);
             break;
           }
-          routerId = r.readString();
+          this.routerId = r.readString();
         case 3:
           if (wt != ob.WireType.boolFalse && wt != ob.WireType.boolTrue) {
             ob.skipAndValidateValue(r, wt, depth, options.maxDepth,
-                maxElements: options.maxCollectionElements);
+                maxElements: options.maxCollectionElements,
+                budget: activeBudget);
             break;
           }
-          active = wt == ob.WireType.boolTrue;
+          this.active = wt == ob.WireType.boolTrue;
         case 4:
           if (wt != ob.WireType.uint) {
             ob.skipAndValidateValue(r, wt, depth, options.maxDepth,
-                maxElements: options.maxCollectionElements);
+                maxElements: options.maxCollectionElements,
+                budget: activeBudget);
             break;
           }
-          uptimeSec = r.readVarint();
+          this.uptimeSec = r.readVarint();
         case 5:
           if (wt != ob.WireType.sint) {
             ob.skipAndValidateValue(r, wt, depth, options.maxDepth,
-                maxElements: options.maxCollectionElements);
+                maxElements: options.maxCollectionElements,
+                budget: activeBudget);
             break;
           }
-          rssiDbm = r.readSint32();
+          this.rssiDbm = r.readSint32();
         case 6:
           if (wt != ob.WireType.float64) {
             ob.skipAndValidateValue(r, wt, depth, options.maxDepth,
-                maxElements: options.maxCollectionElements);
+                maxElements: options.maxCollectionElements,
+                budget: activeBudget);
             break;
           }
-          cpuLoad = r.readFloat64();
+          this.cpuLoad = r.readFloat64();
         case 7:
           if (wt != ob.WireType.array) {
             ob.skipAndValidateValue(r, wt, depth, options.maxDepth,
-                maxElements: options.maxCollectionElements);
+                maxElements: options.maxCollectionElements,
+                budget: activeBudget);
             break;
           }
           final nextDepth = depth + 1;
@@ -852,12 +908,13 @@ class PeerUpdate {
           final body = r.subReader(r.pos, bodyEnd);
           final (elemWt, count) =
               body.readArrayHeader(maxElements: options.maxCollectionElements);
+          activeBudget.consume(count);
           if (elemWt != ob.WireType.string) {
             throw ob.OmniBufTypeMismatchException(
                 'tags WireArray ElementType mismatch: $elemWt');
           }
           for (var i = 0; i < count; i++) {
-            tags.add(body.readString());
+            this.tags.add(body.readString());
           }
           if (body.pos != bodyEnd) {
             throw const ob.OmniBufParseException('WireArray trailing bytes');
@@ -866,7 +923,8 @@ class PeerUpdate {
         case 8:
           if (wt != ob.WireType.array) {
             ob.skipAndValidateValue(r, wt, depth, options.maxDepth,
-                maxElements: options.maxCollectionElements);
+                maxElements: options.maxCollectionElements,
+                budget: activeBudget);
             break;
           }
           final nextDepth = depth + 1;
@@ -878,12 +936,13 @@ class PeerUpdate {
           final body = r.subReader(r.pos, bodyEnd);
           final (elemWt, count) =
               body.readArrayHeader(maxElements: options.maxCollectionElements);
+          activeBudget.consume(count);
           if (elemWt != ob.WireType.uint) {
             throw ob.OmniBufTypeMismatchException(
                 'prefixes WireArray ElementType mismatch: $elemWt');
           }
           for (var i = 0; i < count; i++) {
-            prefixes.add(body.readUint32());
+            this.prefixes.add(body.readUint32());
           }
           if (body.pos != bodyEnd) {
             throw const ob.OmniBufParseException('WireArray trailing bytes');
@@ -892,7 +951,8 @@ class PeerUpdate {
         case 9:
           if (wt != ob.WireType.subMsg) {
             ob.skipAndValidateValue(r, wt, depth, options.maxDepth,
-                maxElements: options.maxCollectionElements);
+                maxElements: options.maxCollectionElements,
+                budget: activeBudget);
             break;
           }
           final nextDepth = depth + 1;
@@ -902,13 +962,14 @@ class PeerUpdate {
           final len = r.readCheckedLength();
           final subEnd = r.pos + len;
           final sub = r.subReader(r.pos, subEnd);
-          final target = location ??= Location();
-          target.decodeBody(sub, nextDepth, options);
+          final target = this.location ??= Location();
+          target.decodeBody(sub, nextDepth, options, activeBudget);
           r.pos = subEnd;
         case 10:
           if (wt != ob.WireType.array) {
             ob.skipAndValidateValue(r, wt, depth, options.maxDepth,
-                maxElements: options.maxCollectionElements);
+                maxElements: options.maxCollectionElements,
+                budget: activeBudget);
             break;
           }
           final nextDepth = depth + 1;
@@ -920,6 +981,7 @@ class PeerUpdate {
           final body = r.subReader(r.pos, bodyEnd);
           final (elemWt, count) =
               body.readArrayHeader(maxElements: options.maxCollectionElements);
+          activeBudget.consume(count);
           if (elemWt != ob.WireType.subMsg) {
             throw ob.OmniBufTypeMismatchException(
                 'neighbors WireArray ElementType mismatch: $elemWt');
@@ -933,9 +995,9 @@ class PeerUpdate {
             final iEnd = body.pos + iLen;
             final iSub = body.subReader(body.pos, iEnd);
             final item = Neighbor();
-            item.decodeBody(iSub, itemDepth, options);
+            item.decodeBody(iSub, itemDepth, options, activeBudget);
             body.pos = iEnd;
-            neighbors.add(item);
+            this.neighbors.add(item);
           }
           if (body.pos != bodyEnd) {
             throw const ob.OmniBufParseException('WireArray trailing bytes');
@@ -944,13 +1006,14 @@ class PeerUpdate {
         case 11:
           if (wt != ob.WireType.uint) {
             ob.skipAndValidateValue(r, wt, depth, options.maxDepth,
-                maxElements: options.maxCollectionElements);
+                maxElements: options.maxCollectionElements,
+                budget: activeBudget);
             break;
           }
-          sequence = r.readVarint();
+          this.sequence = r.readVarint();
         default:
           ob.skipAndValidateValue(r, wt, depth, options.maxDepth,
-              maxElements: options.maxCollectionElements);
+              maxElements: options.maxCollectionElements, budget: activeBudget);
       }
     }
   }
@@ -1129,20 +1192,27 @@ class OpaquePeerUpdate extends ob.OpaqueMessage {
       if (p == null || p.isEmpty) return out;
       return PeerUpdate.decode(p).tags;
     }
+    final budget =
+        ob.DecodeBudget(ob.DecodeOptions.defaultMaxCollectionElements);
     final occs = ob.findAllFields(rawBytes, 7);
     for (var i = 0; i < occs.length; i++) {
       final (start, end, wt) = occs[i];
       if (wt != ob.WireType.array) continue;
       final r = ob.OmniBufReader(rawBytes, start, end);
       final len = r.readCheckedLength();
-      final body = r.subReader(r.pos, r.pos + len);
+      final bodyEnd = r.pos + len;
+      final body = r.subReader(r.pos, bodyEnd);
       final (elemWt, count) = body.readArrayHeader();
+      budget.consume(count);
       if (elemWt != ob.WireType.string) {
         throw ob.OmniBufTypeMismatchException(
             'tags WireArray ElementType mismatch');
       }
       for (var j = 0; j < count; j++) {
         out.add(body.readString());
+      }
+      if (body.pos != bodyEnd) {
+        throw const ob.OmniBufParseException('WireArray trailing bytes');
       }
     }
     return out;
@@ -1172,20 +1242,27 @@ class OpaquePeerUpdate extends ob.OpaqueMessage {
       if (p == null || p.isEmpty) return out;
       return PeerUpdate.decode(p).prefixes;
     }
+    final budget =
+        ob.DecodeBudget(ob.DecodeOptions.defaultMaxCollectionElements);
     final occs = ob.findAllFields(rawBytes, 8);
     for (var i = 0; i < occs.length; i++) {
       final (start, end, wt) = occs[i];
       if (wt != ob.WireType.array) continue;
       final r = ob.OmniBufReader(rawBytes, start, end);
       final len = r.readCheckedLength();
-      final body = r.subReader(r.pos, r.pos + len);
+      final bodyEnd = r.pos + len;
+      final body = r.subReader(r.pos, bodyEnd);
       final (elemWt, count) = body.readArrayHeader();
+      budget.consume(count);
       if (elemWt != ob.WireType.uint) {
         throw ob.OmniBufTypeMismatchException(
             'prefixes WireArray ElementType mismatch');
       }
       for (var j = 0; j < count; j++) {
         out.add(body.readUint32());
+      }
+      if (body.pos != bodyEnd) {
+        throw const ob.OmniBufParseException('WireArray trailing bytes');
       }
     }
     return out;
@@ -1251,11 +1328,11 @@ class OpaquePeerUpdate extends ob.OpaqueMessage {
       setPatch(9, null);
       return;
     }
-    final est = value.estimateBodyBytes();
+    final est = value.estimateBodyBytes(1);
     final w = ob.OmniBufWriter(est + 8);
     w.writeTag(9, ob.WireType.subMsg);
     final slot = w.reserveLenAuto(est);
-    value.encodeInto(w);
+    value.encodeInto(w, depth: 1);
     w.patchLenAuto(slot);
     setPatch(9, w.toBytes());
   }
@@ -1276,25 +1353,33 @@ class OpaquePeerUpdate extends ob.OpaqueMessage {
       if (p == null || p.isEmpty) return out;
       return PeerUpdate.decode(p).neighbors;
     }
+    final budget =
+        ob.DecodeBudget(ob.DecodeOptions.defaultMaxCollectionElements);
     final occs = ob.findAllFields(rawBytes, 10);
     for (var i = 0; i < occs.length; i++) {
       final (start, end, wt) = occs[i];
       if (wt != ob.WireType.array) continue;
       final r = ob.OmniBufReader(rawBytes, start, end);
       final len = r.readCheckedLength();
-      final body = r.subReader(r.pos, r.pos + len);
+      final bodyEnd = r.pos + len;
+      final body = r.subReader(r.pos, bodyEnd);
       final (elemWt, count) = body.readArrayHeader();
+      budget.consume(count);
       if (elemWt != ob.WireType.subMsg) {
         throw ob.OmniBufTypeMismatchException(
             'neighbors WireArray ElementType mismatch');
       }
       for (var j = 0; j < count; j++) {
         final iLen = body.readCheckedLength();
-        final iSub = body.subReader(body.pos, body.pos + iLen);
+        final iEnd = body.pos + iLen;
+        final iSub = body.subReader(body.pos, iEnd);
         final item = Neighbor();
-        item.decodeBody(iSub, 2, ob.DecodeOptions.defaults);
-        body.pos += iLen;
+        item.decodeBody(iSub, 2, ob.DecodeOptions.defaults, budget);
+        body.pos = iEnd;
         out.add(item);
+      }
+      if (body.pos != bodyEnd) {
+        throw const ob.OmniBufParseException('WireArray trailing bytes');
       }
     }
     return out;
@@ -1312,8 +1397,8 @@ class OpaquePeerUpdate extends ob.OpaqueMessage {
     w.writeVarint(value.length);
     for (var i = 0; i < value.length; i++) {
       final item = value[i];
-      final iSlot = w.reserveLenAuto(item.estimateBodyBytes());
-      item.encodeInto(w);
+      final iSlot = w.reserveLenAuto(item.estimateBodyBytes(2));
+      item.encodeInto(w, depth: 2);
       w.patchLenAuto(iSlot);
     }
     w.patchLen2(slot);

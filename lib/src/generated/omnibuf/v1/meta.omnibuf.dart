@@ -1,6 +1,6 @@
 // GENERATED CODE - DO NOT MODIFY BY HAND.
 // Source: omnibuf/v1/meta.proto
-// ignore_for_file: unused_import, constant_identifier_names, non_constant_identifier_names, prefer_final_locals
+// ignore_for_file: unused_import, constant_identifier_names, non_constant_identifier_names, prefer_final_locals, unnecessary_this, camel_case_types
 
 import 'dart:typed_data';
 
@@ -15,18 +15,25 @@ class SchemaMeta {
     this.typeName = '',
     Map<int, String>? fields,
     Map<int, SchemaMeta>? children,
-  })  : fields = fields ?? <int, String>{},
-        children = children ?? <int, SchemaMeta>{};
+  })  : this.fields = fields ?? <int, String>{},
+        this.children = children ?? <int, SchemaMeta>{};
 
   void reset() {
-    typeName = '';
-    fields.clear();
-    children.clear();
+    this.typeName = '';
+    this.fields.clear();
+    this.children.clear();
   }
 
-  int estimateBodyBytes() {
+  int estimateBodyBytes([int depth = 0]) {
+    if (depth > ob.DecodeOptions.defaultMaxDepth) {
+      throw const ob.OmniBufSerializeException(
+          'message encoding depth exceeded limit of ${ob.DecodeOptions.defaultMaxDepth}');
+    }
     var n = 32;
-    n += typeName.length;
+    n += this.typeName.length;
+    for (final v in this.children.values) {
+      n += v.estimateBodyBytes(depth + 2);
+    }
     return n;
   }
 
@@ -42,7 +49,7 @@ class SchemaMeta {
     };
     final children = <int, ob.SchemaMeta>{};
     if (depth + 2 <= maxDepth) {
-      children[3] = SchemaMeta._buildSchemaMeta(depth + 2, maxDepth);
+      children[3] = SchemaMeta.buildSchemaMeta(maxDepth: maxDepth - depth - 2);
     }
     return ob.SchemaMeta(
         typeName: 'omnibuf.v1.SchemaMeta', fields: fields, children: children);
@@ -58,45 +65,49 @@ class SchemaMeta {
   }
 
   void encodeInto(ob.OmniBufWriter w,
-      {ob.EncodeOptions options = ob.EncodeOptions.defaults}) {
-    if (typeName.isNotEmpty) {
-      w.writeTag(1, ob.WireType.string);
-      w.writeString(typeName);
+      {ob.EncodeOptions options = ob.EncodeOptions.defaults, int depth = 0}) {
+    if (depth > ob.DecodeOptions.defaultMaxDepth) {
+      throw const ob.OmniBufSerializeException(
+          'message encoding depth exceeded limit of ${ob.DecodeOptions.defaultMaxDepth}');
     }
-    if (fields.isNotEmpty) {
+    if (this.typeName.isNotEmpty) {
+      w.writeTag(1, ob.WireType.string);
+      w.writeString(this.typeName);
+    }
+    if (this.fields.isNotEmpty) {
       w.writeTag(2, ob.WireType.map);
       final slot = w.reserveLen2();
       w.writeByte(ob.WireType.uint);
       w.writeByte(ob.WireType.string);
-      final keys = fields.keys.toList();
+      final keys = this.fields.keys.toList();
       if (options.deterministicMaps) {
-        keys.sort(ob.compareUint64);
+        keys.sort((a, b) => (a & 0xFFFFFFFF).compareTo(b & 0xFFFFFFFF));
       }
       w.writeVarint(keys.length);
       for (var i = 0; i < keys.length; i++) {
         final k = keys[i];
-        final v = fields[k]!;
+        final v = this.fields[k]!;
         w.writeVarint(k & 0xFFFFFFFF);
         w.writeString(v);
       }
       w.patchLen2(slot);
     }
-    if (children.isNotEmpty) {
+    if (this.children.isNotEmpty) {
       w.writeTag(3, ob.WireType.map);
       final slot = w.reserveLen2();
       w.writeByte(ob.WireType.uint);
       w.writeByte(ob.WireType.subMsg);
-      final keys = children.keys.toList();
+      final keys = this.children.keys.toList();
       if (options.deterministicMaps) {
-        keys.sort(ob.compareUint64);
+        keys.sort((a, b) => (a & 0xFFFFFFFF).compareTo(b & 0xFFFFFFFF));
       }
       w.writeVarint(keys.length);
       for (var i = 0; i < keys.length; i++) {
         final k = keys[i];
-        final v = children[k]!;
+        final v = this.children[k]!;
         w.writeVarint(k & 0xFFFFFFFF);
-        final vSlot = w.reserveLenAuto(v.estimateBodyBytes());
-        v.encodeInto(w, options: options);
+        final vSlot = w.reserveLenAuto(v.estimateBodyBytes(depth + 2));
+        v.encodeInto(w, options: options, depth: depth + 2);
         w.patchLenAuto(vSlot);
       }
       w.patchLen2(slot);
@@ -119,31 +130,38 @@ class SchemaMeta {
     if (!options.merge) {
       reset();
     }
+    final budget = ob.DecodeBudget(options.maxCollectionElements);
     final r = ob.OmniBufReader(data);
-    decodeBody(r, 0, options);
+    decodeBody(r, 0, options, budget);
   }
 
-  void decodeBody(ob.OmniBufReader r, int depth, ob.DecodeOptions options) {
+  void decodeBody(ob.OmniBufReader r, int depth, ob.DecodeOptions options,
+      [ob.DecodeBudget? budget]) {
+    final activeBudget =
+        budget ?? ob.DecodeBudget(options.maxCollectionElements);
     while (r.hasMore) {
       final tag = r.readTag();
       final fnum = tag >> 4;
       final wt = tag & 0x0F;
       if (fnum == 0) {
-        ob.validateField0SubMsg(r, depth, options.maxDepth);
+        ob.validateField0SubMsg(r, depth, options.maxDepth,
+            maxElements: options.maxCollectionElements, budget: activeBudget);
         continue;
       }
       switch (fnum) {
         case 1:
           if (wt != ob.WireType.string) {
             ob.skipAndValidateValue(r, wt, depth, options.maxDepth,
-                maxElements: options.maxCollectionElements);
+                maxElements: options.maxCollectionElements,
+                budget: activeBudget);
             break;
           }
-          typeName = r.readString();
+          this.typeName = r.readString();
         case 2:
           if (wt != ob.WireType.map) {
             ob.skipAndValidateValue(r, wt, depth, options.maxDepth,
-                maxElements: options.maxCollectionElements);
+                maxElements: options.maxCollectionElements,
+                budget: activeBudget);
             break;
           }
           final nextDepth = depth + 1;
@@ -155,13 +173,14 @@ class SchemaMeta {
           final body = r.subReader(r.pos, bodyEnd);
           final (kWt, vWt, count) =
               body.readMapHeader(maxElements: options.maxCollectionElements);
+          activeBudget.consume(count);
           if (kWt != ob.WireType.uint || vWt != ob.WireType.string) {
             throw ob.OmniBufTypeMismatchException(
                 'fields WireMap header mismatch: <$kWt, $vWt>');
           }
           for (var i = 0; i < count; i++) {
             final k = body.readUint32();
-            fields[k] = body.readString();
+            this.fields[k] = body.readString();
           }
           if (body.pos != bodyEnd) {
             throw const ob.OmniBufParseException('WireMap trailing bytes');
@@ -170,7 +189,8 @@ class SchemaMeta {
         case 3:
           if (wt != ob.WireType.map) {
             ob.skipAndValidateValue(r, wt, depth, options.maxDepth,
-                maxElements: options.maxCollectionElements);
+                maxElements: options.maxCollectionElements,
+                budget: activeBudget);
             break;
           }
           final nextDepth = depth + 1;
@@ -182,6 +202,7 @@ class SchemaMeta {
           final body = r.subReader(r.pos, bodyEnd);
           final (kWt, vWt, count) =
               body.readMapHeader(maxElements: options.maxCollectionElements);
+          activeBudget.consume(count);
           if (kWt != ob.WireType.uint || vWt != ob.WireType.subMsg) {
             throw ob.OmniBufTypeMismatchException(
                 'children WireMap header mismatch: <$kWt, $vWt>');
@@ -196,9 +217,9 @@ class SchemaMeta {
             final vEnd = body.pos + vLen;
             final vSub = body.subReader(body.pos, vEnd);
             final v = SchemaMeta();
-            v.decodeBody(vSub, vDepth, options);
+            v.decodeBody(vSub, vDepth, options, activeBudget);
             body.pos = vEnd;
-            children[k] = v;
+            this.children[k] = v;
           }
           if (body.pos != bodyEnd) {
             throw const ob.OmniBufParseException('WireMap trailing bytes');
@@ -206,7 +227,7 @@ class SchemaMeta {
           r.pos = bodyEnd;
         default:
           ob.skipAndValidateValue(r, wt, depth, options.maxDepth,
-              maxElements: options.maxCollectionElements);
+              maxElements: options.maxCollectionElements, budget: activeBudget);
       }
     }
   }
@@ -251,20 +272,27 @@ class OpaqueSchemaMeta extends ob.OpaqueMessage {
       final tmp = SchemaMeta.decode(p);
       return tmp.fields;
     }
+    final budget =
+        ob.DecodeBudget(ob.DecodeOptions.defaultMaxCollectionElements);
     final occs = ob.findAllFields(rawBytes, 2);
     for (var i = 0; i < occs.length; i++) {
       final (start, end, wt) = occs[i];
       if (wt != ob.WireType.map) continue;
       final r = ob.OmniBufReader(rawBytes, start, end);
       final len = r.readCheckedLength();
-      final body = r.subReader(r.pos, r.pos + len);
+      final bodyEnd = r.pos + len;
+      final body = r.subReader(r.pos, bodyEnd);
       final (kWt, vWt, count) = body.readMapHeader();
+      budget.consume(count);
       if (kWt != ob.WireType.uint || vWt != ob.WireType.string) {
         throw ob.OmniBufTypeMismatchException('fields WireMap header mismatch');
       }
       for (var j = 0; j < count; j++) {
         final k = body.readUint32();
         out[k] = body.readString();
+      }
+      if (body.pos != bodyEnd) {
+        throw const ob.OmniBufParseException('WireMap trailing bytes');
       }
     }
     return out;
@@ -281,7 +309,7 @@ class OpaqueSchemaMeta extends ob.OpaqueMessage {
     w.writeByte(ob.WireType.uint);
     w.writeByte(ob.WireType.string);
     final keys = value.keys.toList();
-    keys.sort(ob.compareUint64);
+    keys.sort((a, b) => (a & 0xFFFFFFFF).compareTo(b & 0xFFFFFFFF));
     w.writeVarint(keys.length);
     for (var i = 0; i < keys.length; i++) {
       final k = keys[i];
@@ -301,14 +329,18 @@ class OpaqueSchemaMeta extends ob.OpaqueMessage {
       final tmp = SchemaMeta.decode(p);
       return tmp.children;
     }
+    final budget =
+        ob.DecodeBudget(ob.DecodeOptions.defaultMaxCollectionElements);
     final occs = ob.findAllFields(rawBytes, 3);
     for (var i = 0; i < occs.length; i++) {
       final (start, end, wt) = occs[i];
       if (wt != ob.WireType.map) continue;
       final r = ob.OmniBufReader(rawBytes, start, end);
       final len = r.readCheckedLength();
-      final body = r.subReader(r.pos, r.pos + len);
+      final bodyEnd = r.pos + len;
+      final body = r.subReader(r.pos, bodyEnd);
       final (kWt, vWt, count) = body.readMapHeader();
+      budget.consume(count);
       if (kWt != ob.WireType.uint || vWt != ob.WireType.subMsg) {
         throw ob.OmniBufTypeMismatchException(
             'children WireMap header mismatch');
@@ -316,11 +348,15 @@ class OpaqueSchemaMeta extends ob.OpaqueMessage {
       for (var j = 0; j < count; j++) {
         final k = body.readUint32();
         final vLen = body.readCheckedLength();
-        final vSub = body.subReader(body.pos, body.pos + vLen);
+        final vEnd = body.pos + vLen;
+        final vSub = body.subReader(body.pos, vEnd);
         final v = SchemaMeta();
-        v.decodeBody(vSub, 2, ob.DecodeOptions.defaults);
-        body.pos += vLen;
+        v.decodeBody(vSub, 2, ob.DecodeOptions.defaults, budget);
+        body.pos = vEnd;
         out[k] = v;
+      }
+      if (body.pos != bodyEnd) {
+        throw const ob.OmniBufParseException('WireMap trailing bytes');
       }
     }
     return out;
@@ -337,14 +373,14 @@ class OpaqueSchemaMeta extends ob.OpaqueMessage {
     w.writeByte(ob.WireType.uint);
     w.writeByte(ob.WireType.subMsg);
     final keys = value.keys.toList();
-    keys.sort(ob.compareUint64);
+    keys.sort((a, b) => (a & 0xFFFFFFFF).compareTo(b & 0xFFFFFFFF));
     w.writeVarint(keys.length);
     for (var i = 0; i < keys.length; i++) {
       final k = keys[i];
       final v = value[k]!;
       w.writeVarint(k & 0xFFFFFFFF);
-      final vSlot = w.reserveLenAuto(v.estimateBodyBytes());
-      v.encodeInto(w);
+      final vSlot = w.reserveLenAuto(v.estimateBodyBytes(2));
+      v.encodeInto(w, depth: 2);
       w.patchLenAuto(vSlot);
     }
     w.patchLen2(slot);

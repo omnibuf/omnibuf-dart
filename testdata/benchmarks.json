@@ -13,29 +13,29 @@
       "results": [
         {
           "name": "OmniBuf (Generated)",
-          "nsPerOp": 971,
-          "opsPerSec": 1029866,
+          "nsPerOp": 676,
+          "opsPerSec": 1479290,
           "wireBytes": 365,
           "highlight": true,
           "baseline": true
         },
         {
           "name": "OmniBuf (Schema)",
-          "nsPerOp": 1568,
-          "opsPerSec": 637755,
+          "nsPerOp": 1231,
+          "opsPerSec": 812348,
           "wireBytes": 365,
           "highlight": true
         },
         {
           "name": "package:protobuf",
-          "nsPerOp": 3761,
-          "opsPerSec": 265887,
+          "nsPerOp": 3061,
+          "opsPerSec": 326691,
           "wireBytes": 343
         },
         {
           "name": "dart:convert (JSON)",
-          "nsPerOp": 9414,
-          "opsPerSec": 106225,
+          "nsPerOp": 7289,
+          "opsPerSec": 137193,
           "wireBytes": 803
         }
       ]
@@ -47,26 +47,26 @@
       "results": [
         {
           "name": "OmniBuf (Generated)",
-          "nsPerOp": 1057,
-          "opsPerSec": 946074,
+          "nsPerOp": 778,
+          "opsPerSec": 1285347,
           "highlight": true,
           "baseline": true
         },
         {
           "name": "OmniBuf (Schema)",
-          "nsPerOp": 3199,
-          "opsPerSec": 312598,
+          "nsPerOp": 1950,
+          "opsPerSec": 512821,
           "highlight": true
         },
         {
           "name": "package:protobuf",
-          "nsPerOp": 5083,
-          "opsPerSec": 196734
+          "nsPerOp": 2873,
+          "opsPerSec": 348068
         },
         {
           "name": "dart:convert (JSON)",
-          "nsPerOp": 5468,
-          "opsPerSec": 182882
+          "nsPerOp": 4265,
+          "opsPerSec": 234467
         }
       ]
     },
@@ -77,20 +77,20 @@
       "results": [
         {
           "name": "OmniBuf (Opaque)",
-          "nsPerOp": 393,
-          "opsPerSec": 2544529,
+          "nsPerOp": 306,
+          "opsPerSec": 3267974,
           "highlight": true,
           "baseline": true
         },
         {
           "name": "package:protobuf",
-          "nsPerOp": 3674,
-          "opsPerSec": 272183
+          "nsPerOp": 2821,
+          "opsPerSec": 354484
         },
         {
           "name": "dart:convert (JSON)",
-          "nsPerOp": 5458,
-          "opsPerSec": 183217
+          "nsPerOp": 4249,
+          "opsPerSec": 235349
         }
       ]
     },
@@ -101,20 +101,20 @@
       "results": [
         {
           "name": "OmniBuf (Opaque Splice)",
-          "nsPerOp": 759,
-          "opsPerSec": 1317523,
+          "nsPerOp": 1197,
+          "opsPerSec": 835422,
           "highlight": true,
           "baseline": true
         },
         {
           "name": "package:protobuf",
-          "nsPerOp": 7172,
-          "opsPerSec": 139431
+          "nsPerOp": 5516,
+          "opsPerSec": 181291
         },
         {
           "name": "dart:convert (JSON)",
-          "nsPerOp": 15189,
-          "opsPerSec": 65837
+          "nsPerOp": 11624,
+          "opsPerSec": 86029
         }
       ]
     },
@@ -125,22 +125,22 @@
       "results": [
         {
           "name": "OmniBuf (Generated)",
-          "nsPerOp": 48857,
-          "opsPerSec": 20468,
+          "nsPerOp": 37910,
+          "opsPerSec": 26378,
           "wireBytes": 39255,
           "highlight": true,
           "baseline": true
         },
         {
           "name": "package:protobuf",
-          "nsPerOp": 157251,
-          "opsPerSec": 6359,
+          "nsPerOp": 120668,
+          "opsPerSec": 8287,
           "wireBytes": 39229
         },
         {
           "name": "dart:convert (JSON)",
-          "nsPerOp": 208392,
-          "opsPerSec": 4799,
+          "nsPerOp": 144610,
+          "opsPerSec": 6915,
           "wireBytes": 39681
         }
       ]
@@ -152,20 +152,20 @@
       "results": [
         {
           "name": "OmniBuf (Opaque Splice)",
-          "nsPerOp": 48002,
-          "opsPerSec": 20832,
+          "nsPerOp": 31647,
+          "opsPerSec": 31599,
           "highlight": true,
           "baseline": true
         },
         {
           "name": "package:protobuf",
-          "nsPerOp": 110549,
-          "opsPerSec": 9046
+          "nsPerOp": 84813,
+          "opsPerSec": 11791
         },
         {
           "name": "dart:convert (JSON)",
-          "nsPerOp": 159881,
-          "opsPerSec": 6255
+          "nsPerOp": 119308,
+          "opsPerSec": 8382
         }
       ]
     }

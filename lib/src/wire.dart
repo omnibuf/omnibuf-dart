@@ -707,6 +707,25 @@ String decodeStrictUtf8(Uint8List buf, int start, int end) {
   }
 }
 
+/// Mutable cumulative element/allocation budget threaded through a single
+/// decode or validation pass so chunked collections or repeated structures
+/// cannot bypass `DecodeOptions.maxCollectionElements`.
+class DecodeBudget {
+  final int maxElements;
+  int elements = 0;
+
+  DecodeBudget(this.maxElements);
+
+  void consume(int count) {
+    if (count < 0 || count > maxElements - elements) {
+      throw OmniBufAllocationLimitException(
+        'cumulative element count exceeds limit $maxElements',
+      );
+    }
+    elements += count;
+  }
+}
+
 /// Skips a single field value in `O(1)` for scalars/strings/bytes/extensions,
 /// and recursively validates containers (`WireSubMsg`, `WireArray`, `WireMap`)
 /// against depth limits, Field #0 rules, and container boundaries.
@@ -718,7 +737,9 @@ void skipAndValidateValue(
   bool inCollection = false,
   bool validateStrings = false,
   int maxElements = 16 * 1024 * 1024,
+  DecodeBudget? budget,
 }) {
+  final effectiveBudget = budget ?? DecodeBudget(maxElements);
   switch (wireType) {
     case WireType.uint:
     case WireType.sint:
@@ -776,7 +797,14 @@ void skipAndValidateValue(
         final fnum = tag >> 4;
         final wt = tag & 0x0F;
         if (fnum == 0) {
-          validateField0SubMsg(sub, nextDepth, maxDepth);
+          validateField0SubMsg(
+            sub,
+            nextDepth,
+            maxDepth,
+            maxElements: effectiveBudget.maxElements,
+            validateStrings: validateStrings,
+            budget: effectiveBudget,
+          );
         } else {
           skipAndValidateValue(
             sub,
@@ -784,7 +812,8 @@ void skipAndValidateValue(
             nextDepth,
             maxDepth,
             validateStrings: validateStrings,
-            maxElements: maxElements,
+            maxElements: effectiveBudget.maxElements,
+            budget: effectiveBudget,
           );
         }
       }
@@ -798,7 +827,9 @@ void skipAndValidateValue(
       final len = r.readCheckedLength();
       final bodyEnd = r.pos + len;
       final body = r.subReader(r.pos, bodyEnd);
-      final (elemType, count) = body.readArrayHeader(maxElements: maxElements);
+      final (elemType, count) =
+          body.readArrayHeader(maxElements: effectiveBudget.maxElements);
+      effectiveBudget.consume(count);
       if (elemType == WireType.boolFalse) {
         for (var i = 0; i < count; i++) {
           body.readCollectionBool();
@@ -816,7 +847,8 @@ void skipAndValidateValue(
               maxDepth,
               inCollection: true,
               validateStrings: validateStrings,
-              maxElements: maxElements,
+              maxElements: effectiveBudget.maxElements,
+              budget: effectiveBudget,
             );
           }
         }
@@ -835,7 +867,8 @@ void skipAndValidateValue(
       final bodyEnd = r.pos + len;
       final body = r.subReader(r.pos, bodyEnd);
       final (keyType, valType, count) =
-          body.readMapHeader(maxElements: maxElements);
+          body.readMapHeader(maxElements: effectiveBudget.maxElements);
+      effectiveBudget.consume(count);
       for (var i = 0; i < count; i++) {
         skipAndValidateValue(
           body,
@@ -844,7 +877,8 @@ void skipAndValidateValue(
           maxDepth,
           inCollection: true,
           validateStrings: validateStrings,
-          maxElements: maxElements,
+          maxElements: effectiveBudget.maxElements,
+          budget: effectiveBudget,
         );
         skipAndValidateValue(
           body,
@@ -853,7 +887,8 @@ void skipAndValidateValue(
           maxDepth,
           inCollection: true,
           validateStrings: validateStrings,
-          maxElements: maxElements,
+          maxElements: effectiveBudget.maxElements,
+          budget: effectiveBudget,
         );
       }
       if (body.pos != bodyEnd) {
@@ -879,7 +914,15 @@ void skipAndValidateValue(
 /// Enforces depth (+1 for `SchemaMeta` submessage, +1 for `fields`/`children` map,
 /// +1 for each child `SchemaMeta`), strict UTF-8 on `type_name` and `fields` values,
 /// and exact map headers (`0x00`/`0x0A` for `fields`, `0x00`/`0x0C` for `children`).
-void validateField0SubMsg(OmniBufReader r, int depth, int maxDepth) {
+void validateField0SubMsg(
+  OmniBufReader r,
+  int depth,
+  int maxDepth, {
+  int maxElements = 16 * 1024 * 1024,
+  bool validateStrings = true,
+  DecodeBudget? budget,
+}) {
+  final effectiveBudget = budget ?? DecodeBudget(maxElements);
   final nextDepth = depth + 1;
   if (nextDepth > maxDepth) {
     throw OmniBufDepthLimitException(maxDepth);
@@ -892,7 +935,14 @@ void validateField0SubMsg(OmniBufReader r, int depth, int maxDepth) {
     final fnum = tag >> 4;
     final wt = tag & 0x0F;
     if (fnum == 0) {
-      validateField0SubMsg(sub, nextDepth, maxDepth);
+      validateField0SubMsg(
+        sub,
+        nextDepth,
+        maxDepth,
+        maxElements: effectiveBudget.maxElements,
+        validateStrings: validateStrings,
+        budget: effectiveBudget,
+      );
       continue;
     }
     switch (fnum) {
@@ -900,7 +950,15 @@ void validateField0SubMsg(OmniBufReader r, int depth, int maxDepth) {
         if (wt == WireType.string) {
           sub.readString();
         } else {
-          skipAndValidateValue(sub, wt, nextDepth, maxDepth);
+          skipAndValidateValue(
+            sub,
+            wt,
+            nextDepth,
+            maxDepth,
+            validateStrings: validateStrings,
+            maxElements: effectiveBudget.maxElements,
+            budget: effectiveBudget,
+          );
         }
       case 2: // fields: map<uint32, string>
         if (wt == WireType.map) {
@@ -911,7 +969,9 @@ void validateField0SubMsg(OmniBufReader r, int depth, int maxDepth) {
           final mLen = sub.readCheckedLength();
           final mEnd = sub.pos + mLen;
           final mBody = sub.subReader(sub.pos, mEnd);
-          final (kt, vt, count) = mBody.readMapHeader();
+          final (kt, vt, count) =
+              mBody.readMapHeader(maxElements: effectiveBudget.maxElements);
+          effectiveBudget.consume(count);
           if (kt != WireType.uint || vt != WireType.string) {
             throw OmniBufTypeMismatchException(
               'SchemaMeta.fields expects map<uint, string>, got <$kt, $vt>',
@@ -933,7 +993,15 @@ void validateField0SubMsg(OmniBufReader r, int depth, int maxDepth) {
           }
           sub.pos = mEnd;
         } else {
-          skipAndValidateValue(sub, wt, nextDepth, maxDepth);
+          skipAndValidateValue(
+            sub,
+            wt,
+            nextDepth,
+            maxDepth,
+            validateStrings: validateStrings,
+            maxElements: effectiveBudget.maxElements,
+            budget: effectiveBudget,
+          );
         }
       case 3: // children: map<uint32, SchemaMeta>
         if (wt == WireType.map) {
@@ -944,7 +1012,9 @@ void validateField0SubMsg(OmniBufReader r, int depth, int maxDepth) {
           final mLen = sub.readCheckedLength();
           final mEnd = sub.pos + mLen;
           final mBody = sub.subReader(sub.pos, mEnd);
-          final (kt, vt, count) = mBody.readMapHeader();
+          final (kt, vt, count) =
+              mBody.readMapHeader(maxElements: effectiveBudget.maxElements);
+          effectiveBudget.consume(count);
           if (kt != WireType.uint || vt != WireType.subMsg) {
             throw OmniBufTypeMismatchException(
               'SchemaMeta.children expects map<uint, submsg>, got <$kt, $vt>',
@@ -957,7 +1027,14 @@ void validateField0SubMsg(OmniBufReader r, int depth, int maxDepth) {
                 'SchemaMeta.children key $k out of valid field number range',
               );
             }
-            validateField0SubMsg(mBody, mapDepth, maxDepth);
+            validateField0SubMsg(
+              mBody,
+              mapDepth,
+              maxDepth,
+              maxElements: effectiveBudget.maxElements,
+              validateStrings: validateStrings,
+              budget: effectiveBudget,
+            );
           }
           if (mBody.pos != mEnd) {
             throw const OmniBufParseException(
@@ -966,7 +1043,15 @@ void validateField0SubMsg(OmniBufReader r, int depth, int maxDepth) {
           }
           sub.pos = mEnd;
         } else {
-          skipAndValidateValue(sub, wt, nextDepth, maxDepth);
+          skipAndValidateValue(
+            sub,
+            wt,
+            nextDepth,
+            maxDepth,
+            validateStrings: validateStrings,
+            maxElements: effectiveBudget.maxElements,
+            budget: effectiveBudget,
+          );
         }
       default:
         skipAndValidateValue(
@@ -974,7 +1059,9 @@ void validateField0SubMsg(OmniBufReader r, int depth, int maxDepth) {
           wt,
           nextDepth,
           maxDepth,
-          validateStrings: true,
+          validateStrings: validateStrings,
+          maxElements: effectiveBudget.maxElements,
+          budget: effectiveBudget,
         );
     }
   }
@@ -989,13 +1076,21 @@ void validatePacket(
   bool validateStrings = true,
   int maxElements = 16 * 1024 * 1024,
 }) {
+  final budget = DecodeBudget(maxElements);
   final r = OmniBufReader(data);
   while (r.hasMore) {
     final tag = r.readTag();
     final fnum = tag >> 4;
     final wt = tag & 0x0F;
     if (fnum == 0) {
-      validateField0SubMsg(r, 0, maxDepth);
+      validateField0SubMsg(
+        r,
+        0,
+        maxDepth,
+        maxElements: maxElements,
+        validateStrings: validateStrings,
+        budget: budget,
+      );
     } else {
       skipAndValidateValue(
         r,
@@ -1004,6 +1099,7 @@ void validatePacket(
         maxDepth,
         validateStrings: validateStrings,
         maxElements: maxElements,
+        budget: budget,
       );
     }
   }

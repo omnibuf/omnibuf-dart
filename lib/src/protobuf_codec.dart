@@ -75,6 +75,20 @@ abstract final class ProtobufOmniBufCodec {
     GeneratedMessage msg, {
     EncodeOptions options = EncodeOptions.defaults,
   }) {
+    _encodeInto(w, msg, options, 0);
+  }
+
+  static void _encodeInto(
+    OmniBufWriter w,
+    GeneratedMessage msg,
+    EncodeOptions options,
+    int depth,
+  ) {
+    if (depth > DecodeOptions.defaultMaxDepth) {
+      throw const OmniBufSerializeException(
+        'message encoding depth exceeded limit of ${DecodeOptions.defaultMaxDepth}',
+      );
+    }
     final info = msg.info_;
     final sortedFields = info.byTagAsString.values.toList()
       ..sort((a, b) => a.tagNumber.compareTo(b.tagNumber));
@@ -99,8 +113,8 @@ abstract final class ProtobufOmniBufCodec {
         }
         w.writeVarint(keys.length);
         for (final k in keys) {
-          _writePbCollectionValue(w, kBase, k, options);
-          _writePbCollectionValue(w, vBase, map[k], options);
+          _writePbCollectionValue(w, kBase, k, options, depth + 1);
+          _writePbCollectionValue(w, vBase, map[k], options, depth + 1);
         }
         w.patchLen2(slot);
         continue;
@@ -116,7 +130,7 @@ abstract final class ProtobufOmniBufCodec {
         w.writeByte(elemWt);
         w.writeVarint(list.length);
         for (final item in list) {
-          _writePbCollectionValue(w, baseType, item, options);
+          _writePbCollectionValue(w, baseType, item, options, depth + 1);
         }
         w.patchLen2(slot);
         continue;
@@ -124,7 +138,7 @@ abstract final class ProtobufOmniBufCodec {
 
       if (!msg.hasField(tag)) continue;
       final val = msg.getField(tag) as Object;
-      _writePbSingularField(w, fi, val, options);
+      _writePbSingularField(w, fi, val, options, depth);
     }
   }
 
@@ -143,8 +157,9 @@ abstract final class ProtobufOmniBufCodec {
     if (!options.merge) {
       dst.clear();
     }
+    final budget = DecodeBudget(options.maxCollectionElements);
     final r = OmniBufReader(data);
-    _decodeBody(r, dst, 0, options);
+    _decodeBody(r, dst, 0, options, budget);
   }
 
   /// Builds Field #0 [SchemaMeta] from a `package:protobuf` [BuilderInfo].
@@ -184,6 +199,7 @@ abstract final class ProtobufOmniBufCodec {
     GeneratedMessage dst,
     int depth,
     DecodeOptions options,
+    DecodeBudget budget,
   ) {
     final info = dst.info_;
     while (r.hasMore) {
@@ -191,7 +207,13 @@ abstract final class ProtobufOmniBufCodec {
       final fnum = tag >> 4;
       final wt = tag & 0x0F;
       if (fnum == 0) {
-        validateField0SubMsg(r, depth, options.maxDepth);
+        validateField0SubMsg(
+          r,
+          depth,
+          options.maxDepth,
+          maxElements: options.maxCollectionElements,
+          budget: budget,
+        );
         continue;
       }
       final fi = info.fieldInfo[fnum];
@@ -202,6 +224,7 @@ abstract final class ProtobufOmniBufCodec {
           depth,
           options.maxDepth,
           maxElements: options.maxCollectionElements,
+          budget: budget,
         );
         continue;
       }
@@ -213,6 +236,7 @@ abstract final class ProtobufOmniBufCodec {
             depth,
             options.maxDepth,
             maxElements: options.maxCollectionElements,
+            budget: budget,
           );
           continue;
         }
@@ -227,6 +251,7 @@ abstract final class ProtobufOmniBufCodec {
         final (kWt, vWt, count) = body.readMapHeader(
           maxElements: options.maxCollectionElements,
         );
+        budget.consume(count);
         final kBase = _pbBaseType(mfi.keyFieldType);
         final vBase = _pbBaseType(mfi.valueFieldType);
         final expKWt = _pbBaseToWireType(kBase);
@@ -237,6 +262,8 @@ abstract final class ProtobufOmniBufCodec {
           );
         }
         final map = dst.getField(fnum) as Map<dynamic, dynamic>;
+        final valValueOf =
+            mfi.valueOf ?? mfi.mapEntryBuilderInfo.fieldInfo[2]?.valueOf;
         for (var i = 0; i < count; i++) {
           final k = _readPbCollectionValue(
             body,
@@ -245,15 +272,20 @@ abstract final class ProtobufOmniBufCodec {
             null,
             nextDepth,
             options,
+            budget,
           );
           final v = _readPbCollectionValue(
             body,
             vBase,
             mfi.valueCreator,
-            null,
+            valValueOf,
             nextDepth,
             options,
+            budget,
           );
+          if (vBase == _pbEnum && valValueOf != null && v == null) {
+            continue;
+          }
           map[k] = v;
         }
         if (body.pos != bodyEnd) {
@@ -271,6 +303,7 @@ abstract final class ProtobufOmniBufCodec {
             depth,
             options.maxDepth,
             maxElements: options.maxCollectionElements,
+            budget: budget,
           );
           continue;
         }
@@ -284,6 +317,7 @@ abstract final class ProtobufOmniBufCodec {
         final (elemWt, count) = body.readArrayHeader(
           maxElements: options.maxCollectionElements,
         );
+        budget.consume(count);
         final baseType = _pbBaseType(fi.type);
         final expWt = _pbBaseToWireType(baseType);
         if (elemWt != expWt) {
@@ -293,16 +327,19 @@ abstract final class ProtobufOmniBufCodec {
         }
         final list = dst.getField(fnum) as List<dynamic>;
         for (var i = 0; i < count; i++) {
-          list.add(
-            _readPbCollectionValue(
-              body,
-              baseType,
-              fi.subBuilder,
-              fi.valueOf,
-              nextDepth,
-              options,
-            ),
+          final v = _readPbCollectionValue(
+            body,
+            baseType,
+            fi.subBuilder,
+            fi.valueOf,
+            nextDepth,
+            options,
+            budget,
           );
+          if (baseType == _pbEnum && fi.valueOf != null && v == null) {
+            continue;
+          }
+          list.add(v);
         }
         if (body.pos != bodyEnd) {
           throw const OmniBufParseException('WireArray trailing bytes');
@@ -319,10 +356,11 @@ abstract final class ProtobufOmniBufCodec {
           depth,
           options.maxDepth,
           maxElements: options.maxCollectionElements,
+          budget: budget,
         );
         continue;
       }
-      _readPbSingularField(r, dst, fi, baseType, wt, depth, options);
+      _readPbSingularField(r, dst, fi, baseType, wt, depth, options, budget);
     }
   }
 
@@ -331,6 +369,7 @@ abstract final class ProtobufOmniBufCodec {
     FieldInfo<dynamic> fi,
     Object val,
     EncodeOptions options,
+    int depth,
   ) {
     final tag = fi.tagNumber;
     final base = _pbBaseType(fi.type);
@@ -381,7 +420,7 @@ abstract final class ProtobufOmniBufCodec {
     } else if (base == _pbMessage || base == _pbGroup) {
       w.writeTag(tag, WireType.subMsg);
       final slot = w.reserveLen2();
-      encodeInto(w, val as GeneratedMessage, options: options);
+      _encodeInto(w, val as GeneratedMessage, options, depth + 1);
       w.patchLen2(slot);
     } else {
       throw OmniBufSerializeException(
@@ -398,6 +437,7 @@ abstract final class ProtobufOmniBufCodec {
     int wt,
     int depth,
     DecodeOptions options,
+    DecodeBudget budget,
   ) {
     final tag = fi.tagNumber;
     if (base == _pbBool) {
@@ -447,7 +487,7 @@ abstract final class ProtobufOmniBufCodec {
         subMsg = fi.subBuilder!();
         dst.setField(tag, subMsg);
       }
-      _decodeBody(subReader, subMsg, nextDepth, options);
+      _decodeBody(subReader, subMsg, nextDepth, options, budget);
       r.pos = subEnd;
     } else {
       throw OmniBufParseException(
@@ -461,6 +501,7 @@ abstract final class ProtobufOmniBufCodec {
     int base,
     Object? val,
     EncodeOptions options,
+    int depth,
   ) {
     if (base == _pbBool) {
       w.writeByte(val == true ? 1 : 0);
@@ -494,7 +535,7 @@ abstract final class ProtobufOmniBufCodec {
     } else if (base == _pbMessage || base == _pbGroup) {
       final slot = w.reserveLen2();
       if (val != null) {
-        encodeInto(w, val as GeneratedMessage, options: options);
+        _encodeInto(w, val as GeneratedMessage, options, depth + 1);
       }
       w.patchLen2(slot);
     } else {
@@ -504,13 +545,14 @@ abstract final class ProtobufOmniBufCodec {
     }
   }
 
-  static Object _readPbCollectionValue(
+  static Object? _readPbCollectionValue(
     OmniBufReader r,
     int base,
     CreateBuilderFunc? subBuilder,
     ValueOfFunc? valueOf,
     int depth,
     DecodeOptions options,
+    DecodeBudget budget,
   ) {
     if (base == _pbBool) {
       return r.readCollectionBool();
@@ -524,7 +566,10 @@ abstract final class ProtobufOmniBufCodec {
       return r.readFloat32();
     } else if (base == _pbEnum) {
       final raw = r.readSint32();
-      return valueOf?.call(raw) ?? raw;
+      if (valueOf != null) {
+        return valueOf(raw);
+      }
+      return raw;
     } else if (base == _pbInt32 || base == _pbSint32) {
       return r.readSint32();
     } else if (base == _pbUint32) {
@@ -550,7 +595,7 @@ abstract final class ProtobufOmniBufCodec {
       final subEnd = r.pos + len;
       final subReader = r.subReader(r.pos, subEnd);
       final subMsg = subBuilder!();
-      _decodeBody(subReader, subMsg, nextDepth, options);
+      _decodeBody(subReader, subMsg, nextDepth, options, budget);
       r.pos = subEnd;
       return subMsg;
     }
@@ -576,7 +621,9 @@ abstract final class ProtobufOmniBufCodec {
         keyBase == _pbSfixed64) {
       keys.sort((a, b) => (a as Int64).compareTo(b as Int64));
     } else {
-      keys.sort((a, b) => (a as int).compareTo(b as int));
+      keys.sort(
+        (a, b) => (a as int).toSigned(32).compareTo((b as int).toSigned(32)),
+      );
     }
   }
 }

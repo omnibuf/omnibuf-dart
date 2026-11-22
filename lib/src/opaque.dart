@@ -229,22 +229,21 @@ abstract class OpaqueMessage {
   }
 
   /// Fast single-field splice into a reusable [OmniBufWriter] (zero extra copy when using [writer.viewBytes]).
-  void marshalInto(OmniBufWriter writer) {
+  /// Validates structural framing and UTF-8 of [rawBytes] when [validate] is `true` (default).
+  void marshalInto(OmniBufWriter writer, {bool validate = true}) {
+    if (validate) {
+      validatePacket(rawBytes, validateStrings: true);
+    }
     if (_dirty.isEmpty) {
-      final r = OmniBufReader(rawBytes);
-      while (r.hasMore) {
-        final tag = r.readTag();
-        fastSkipValue(r, tag & 0x0F);
+      if (!validate) {
+        final r = OmniBufReader(rawBytes);
+        while (r.hasMore) {
+          final tag = r.readTag();
+          fastSkipValue(r, tag & 0x0F);
+        }
       }
       writer.writeRawBytes(rawBytes);
       return;
-    }
-    final patches = <FieldPatch>[
-      for (final e in _dirty.entries) FieldPatch(e.key, e.value),
-    ];
-    final patchMap = <int, Uint8List?>{};
-    for (final p in patches) {
-      patchMap[p.fieldNumber] = p.encodedField;
     }
     final emitted = <int>{};
     final r = OmniBufReader(rawBytes);
@@ -255,13 +254,13 @@ abstract class OpaqueMessage {
       final fnum = tag >> 4;
       final wt = tag & 0x0F;
       final fieldEnd = fastSkipValue(r, wt);
-      if (patchMap.containsKey(fnum)) {
+      if (_dirty.containsKey(fnum)) {
         if (fieldStart > copyStart) {
           writer.writeRawSlice(rawBytes, copyStart, fieldStart);
         }
         if (!emitted.contains(fnum)) {
           emitted.add(fnum);
-          final replacement = patchMap[fnum];
+          final replacement = _dirty[fnum];
           if (replacement != null && replacement.isNotEmpty) {
             writer.writeRawBytes(replacement);
           }
@@ -272,17 +271,19 @@ abstract class OpaqueMessage {
     if (rawBytes.length > copyStart) {
       writer.writeRawSlice(rawBytes, copyStart, rawBytes.length);
     }
-    final remainingFields = <int>[];
-    for (final fnum in patchMap.keys) {
-      if (!emitted.contains(fnum)) {
-        remainingFields.add(fnum);
+    if (emitted.length < _dirty.length) {
+      final remainingFields = <int>[];
+      for (final fnum in _dirty.keys) {
+        if (!emitted.contains(fnum)) {
+          remainingFields.add(fnum);
+        }
       }
-    }
-    remainingFields.sort();
-    for (final fnum in remainingFields) {
-      final replacement = patchMap[fnum];
-      if (replacement != null && replacement.isNotEmpty) {
-        writer.writeRawBytes(replacement);
+      remainingFields.sort();
+      for (final fnum in remainingFields) {
+        final replacement = _dirty[fnum];
+        if (replacement != null && replacement.isNotEmpty) {
+          writer.writeRawBytes(replacement);
+        }
       }
     }
   }

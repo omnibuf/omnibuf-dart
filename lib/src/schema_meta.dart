@@ -24,81 +24,145 @@ class SchemaMeta {
         children = children ?? <int, SchemaMeta>{};
 
   /// Returns a deep copy of this metadata tree.
-  SchemaMeta clone() {
-    return SchemaMeta(
-      typeName: typeName,
-      fields: Map<int, String>.of(fields),
-      children: {
-        for (final entry in children.entries) entry.key: entry.value.clone(),
-      },
-    );
+  SchemaMeta clone() => _clone(0, Set<SchemaMeta>.identity());
+
+  SchemaMeta _clone(int depth, Set<SchemaMeta> visiting) {
+    if (depth > DecodeOptions.defaultMaxDepth || !visiting.add(this)) {
+      throw const OmniBufSerializeException(
+        'SchemaMeta cycle or recursion depth limit exceeded',
+      );
+    }
+    try {
+      return SchemaMeta(
+        typeName: typeName,
+        fields: Map<int, String>.of(fields),
+        children: {
+          for (final entry in children.entries)
+            entry.key: entry.value._clone(depth + 1, visiting),
+        },
+      );
+    } finally {
+      visiting.remove(this);
+    }
   }
 
   /// Merges [other] into this [SchemaMeta] according to OmniBuf v0.1 Section 8.2:
   /// - Later non-empty `typeName` wins.
   /// - Later `fields` entries override per field number (including `""` clearing to `field_<N>`).
   /// - `children` entries merge recursively by field number.
-  void mergeFrom(SchemaMeta other) {
-    if (other.typeName.isNotEmpty) {
-      typeName = other.typeName;
+  ///
+  /// When [preserveEmpty] is `true`, empty-string `""` tombstones are retained in
+  /// `fields` so a subsequent merge onto an inherited parent schema still clears
+  /// inherited names.
+  void mergeFrom(SchemaMeta other, {bool preserveEmpty = false}) {
+    _mergeFrom(
+      other,
+      preserveEmpty,
+      0,
+      Set<SchemaMeta>.identity(),
+      Set<SchemaMeta>.identity(),
+    );
+  }
+
+  void _mergeFrom(
+    SchemaMeta other,
+    bool preserveEmpty,
+    int depth,
+    Set<SchemaMeta> visitingDst,
+    Set<SchemaMeta> visitingSrc,
+  ) {
+    if (depth > DecodeOptions.defaultMaxDepth ||
+        !visitingDst.add(this) ||
+        !visitingSrc.add(other)) {
+      throw const OmniBufSerializeException(
+        'SchemaMeta cycle or recursion depth limit exceeded',
+      );
     }
-    for (final entry in other.fields.entries) {
-      if (entry.value.isEmpty) {
-        fields.remove(entry.key);
-      } else {
-        fields[entry.key] = entry.value;
+    try {
+      if (other.typeName.isNotEmpty) {
+        typeName = other.typeName;
       }
-    }
-    for (final entry in other.children.entries) {
-      final existing = children[entry.key];
-      if (existing != null) {
-        existing.mergeFrom(entry.value);
-      } else {
-        children[entry.key] = entry.value.clone();
+      for (final entry in other.fields.entries) {
+        if (entry.value.isEmpty && !preserveEmpty) {
+          fields.remove(entry.key);
+        } else {
+          fields[entry.key] = entry.value;
+        }
       }
+      for (final entry in other.children.entries) {
+        final existing = children[entry.key];
+        if (existing != null) {
+          existing._mergeFrom(
+            entry.value,
+            preserveEmpty,
+            depth + 1,
+            visitingDst,
+            visitingSrc,
+          );
+        } else {
+          children[entry.key] = entry.value._clone(depth + 1, visitingSrc);
+        }
+      }
+    } finally {
+      visitingDst.remove(this);
+      visitingSrc.remove(other);
     }
   }
 
   /// Writes this [SchemaMeta] as Field #0 (`Tag = 0x19`) into [w].
-  /// Guards against cyclic [children] graphs via [visited] and [maxDepth].
+  /// Guards against cyclic [children] graphs via identity set and depth limit.
   void writeField0(OmniBufWriter w, {int maxDepth = 16}) {
     w.writeByte(WireType.field0EncodedTag);
-    _writeBody(w, 0, maxDepth);
+    _writeBody(w, 0, maxDepth, Set<SchemaMeta>.identity());
   }
 
-  void _writeBody(OmniBufWriter w, int depth, int maxDepth) {
-    final slot = w.reserveLen2();
-    if (typeName.isNotEmpty) {
-      w.writeTag(1, WireType.string);
-      w.writeString(typeName);
+  void _writeBody(
+    OmniBufWriter w,
+    int depth,
+    int maxDepth,
+    Set<SchemaMeta> visiting,
+  ) {
+    if (depth > DecodeOptions.defaultMaxDepth || !visiting.add(this)) {
+      throw const OmniBufSerializeException(
+        'SchemaMeta cycle or recursion depth limit exceeded',
+      );
     }
-    if (fields.isNotEmpty) {
-      w.writeTag(2, WireType.map);
-      final mSlot = w.reserveLen2();
-      w.writeByte(WireType.uint);
-      w.writeByte(WireType.string);
-      final keys = fields.keys.toList()..sort();
-      w.writeVarint(keys.length);
-      for (final k in keys) {
-        w.writeVarint(k);
-        w.writeString(fields[k]!);
+    try {
+      final slot = w.reserveLen2();
+      if (typeName.isNotEmpty) {
+        w.writeTag(1, WireType.string);
+        w.writeString(typeName);
       }
-      w.patchLen2(mSlot);
-    }
-    if (children.isNotEmpty && depth + 2 <= maxDepth) {
-      w.writeTag(3, WireType.map);
-      final mSlot = w.reserveLen2();
-      w.writeByte(WireType.uint);
-      w.writeByte(WireType.subMsg);
-      final keys = children.keys.toList()..sort();
-      w.writeVarint(keys.length);
-      for (final k in keys) {
-        w.writeVarint(k);
-        children[k]!._writeBody(w, depth + 2, maxDepth);
+      if (fields.isNotEmpty) {
+        w.writeTag(2, WireType.map);
+        final mSlot = w.reserveLen2();
+        w.writeByte(WireType.uint);
+        w.writeByte(WireType.string);
+        final keys = fields.keys.toList()..sort();
+        w.writeVarint(keys.length);
+        for (final k in keys) {
+          w.writeVarint(k);
+          w.writeString(fields[k]!);
+        }
+        w.patchLen2(mSlot);
       }
-      w.patchLen2(mSlot);
+      if (children.isNotEmpty && depth + 2 <= maxDepth) {
+        w.writeTag(3, WireType.map);
+        final mSlot = w.reserveLen2();
+        w.writeByte(WireType.uint);
+        w.writeByte(WireType.subMsg);
+        final keys = children.keys.toList()..sort();
+        w.writeVarint(keys.length);
+        for (final k in keys) {
+          w.writeVarint(k);
+          children[k]!._writeBody(w, depth + 2, maxDepth, visiting);
+        }
+        w.patchLen2(mSlot);
+      }
+      w.patchLen2(slot);
+    } finally {
+      visiting.remove(this);
     }
-    w.patchLen2(slot);
   }
 
   /// Decodes a [SchemaMeta] submessage (starting at its `ByteLen` prefix).
@@ -107,7 +171,10 @@ class SchemaMeta {
     int depth,
     int maxDepth, {
     int maxElements = DecodeOptions.defaultMaxCollectionElements,
+    DecodeBudget? budget,
   }) {
+    final effectiveBudget = budget ?? DecodeBudget(maxElements);
+    effectiveBudget.consume(1);
     final nextDepth = depth + 1;
     if (nextDepth > maxDepth) {
       throw OmniBufDepthLimitException(maxDepth);
@@ -123,7 +190,13 @@ class SchemaMeta {
       final fnum = tag >> 4;
       final wt = tag & 0x0F;
       if (fnum == 0) {
-        validateField0SubMsg(sub, nextDepth, maxDepth);
+        validateField0SubMsg(
+          sub,
+          nextDepth,
+          maxDepth,
+          maxElements: effectiveBudget.maxElements,
+          budget: effectiveBudget,
+        );
         continue;
       }
       switch (fnum) {
@@ -131,7 +204,14 @@ class SchemaMeta {
           if (wt == WireType.string) {
             meta.typeName = sub.readString();
           } else {
-            skipAndValidateValue(sub, wt, nextDepth, maxDepth);
+            skipAndValidateValue(
+              sub,
+              wt,
+              nextDepth,
+              maxDepth,
+              maxElements: effectiveBudget.maxElements,
+              budget: effectiveBudget,
+            );
           }
         case 2: // fields: map<uint32, string>
           if (wt == WireType.map) {
@@ -142,8 +222,10 @@ class SchemaMeta {
             final mLen = sub.readCheckedLength();
             final mEnd = sub.pos + mLen;
             final mBody = sub.subReader(sub.pos, mEnd);
-            final (kt, vt, count) =
-                mBody.readMapHeader(maxElements: maxElements);
+            final (kt, vt, count) = mBody.readMapHeader(
+              maxElements: effectiveBudget.maxElements,
+            );
+            effectiveBudget.consume(count);
             if (kt != WireType.uint || vt != WireType.string) {
               throw OmniBufTypeMismatchException(
                 'SchemaMeta.fields expects map<uint, string>, got <$kt, $vt>',
@@ -166,7 +248,14 @@ class SchemaMeta {
             }
             sub.pos = mEnd;
           } else {
-            skipAndValidateValue(sub, wt, nextDepth, maxDepth);
+            skipAndValidateValue(
+              sub,
+              wt,
+              nextDepth,
+              maxDepth,
+              maxElements: effectiveBudget.maxElements,
+              budget: effectiveBudget,
+            );
           }
         case 3: // children: map<uint32, SchemaMeta>
           if (wt == WireType.map) {
@@ -177,8 +266,10 @@ class SchemaMeta {
             final mLen = sub.readCheckedLength();
             final mEnd = sub.pos + mLen;
             final mBody = sub.subReader(sub.pos, mEnd);
-            final (kt, vt, count) =
-                mBody.readMapHeader(maxElements: maxElements);
+            final (kt, vt, count) = mBody.readMapHeader(
+              maxElements: effectiveBudget.maxElements,
+            );
+            effectiveBudget.consume(count);
             if (kt != WireType.uint || vt != WireType.subMsg) {
               throw OmniBufTypeMismatchException(
                 'SchemaMeta.children expects map<uint, submsg>, got <$kt, $vt>',
@@ -197,7 +288,8 @@ class SchemaMeta {
                 mBody,
                 mapDepth,
                 maxDepth,
-                maxElements: maxElements,
+                maxElements: effectiveBudget.maxElements,
+                budget: effectiveBudget,
               );
               mapChildren[k] = child;
             }
@@ -211,13 +303,20 @@ class SchemaMeta {
             for (final entry in mapChildren.entries) {
               final existing = meta.children[entry.key];
               if (existing != null) {
-                existing.mergeFrom(entry.value);
+                existing.mergeFrom(entry.value, preserveEmpty: true);
               } else {
                 meta.children[entry.key] = entry.value;
               }
             }
           } else {
-            skipAndValidateValue(sub, wt, nextDepth, maxDepth);
+            skipAndValidateValue(
+              sub,
+              wt,
+              nextDepth,
+              maxDepth,
+              maxElements: effectiveBudget.maxElements,
+              budget: effectiveBudget,
+            );
           }
         default:
           skipAndValidateValue(
@@ -226,6 +325,8 @@ class SchemaMeta {
             nextDepth,
             maxDepth,
             validateStrings: true,
+            maxElements: effectiveBudget.maxElements,
+            budget: effectiveBudget,
           );
       }
     }
@@ -238,7 +339,9 @@ class SchemaMeta {
   static SchemaMeta? readFromPacket(
     Uint8List data, {
     int maxDepth = DecodeOptions.defaultMaxDepth,
+    int maxElements = DecodeOptions.defaultMaxCollectionElements,
   }) {
+    final budget = DecodeBudget(maxElements);
     final r = OmniBufReader(data);
     SchemaMeta? merged;
     while (r.hasMore) {
@@ -246,7 +349,13 @@ class SchemaMeta {
       final fnum = tag >> 4;
       final wt = tag & 0x0F;
       if (fnum == 0) {
-        final block = decodeSubMsg(r, 0, maxDepth);
+        final block = decodeSubMsg(
+          r,
+          0,
+          maxDepth,
+          maxElements: maxElements,
+          budget: budget,
+        );
         if (merged == null) {
           merged = SchemaMeta();
           merged.mergeFrom(block);
