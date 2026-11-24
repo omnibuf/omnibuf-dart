@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.1.2
+
+- Added detached `package:omnibuf/grpc.dart` codec helpers (`ClientMethod` and `ServiceMethod` marshallers for `package:grpc`) with zero runtime gRPC dependency on core `package:omnibuf/omnibuf.dart`.
+- Added detached `package:omnibuf/connect.dart` codec helpers (`OmniBufConnectCodec`) separate from gRPC.
+- Added integration tests exercising `package:grpc` loopback `Server` and `ClientChannel` unary RPCs and Connect codec round-trips.
+
 ## 0.1.1
 
 - Hardened cumulative decode element budgets across all 4 tiers, `decodeBlind`, and Field #0 validation.

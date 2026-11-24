@@ -34,6 +34,42 @@ void main() {
 }
 ```
 
+## gRPC
+
+Import the detached `package:omnibuf/grpc.dart` entrypoint for `package:grpc` without adding a runtime gRPC dependency to core `omnibuf`.
+
+```dart
+import 'package:grpc/grpc.dart';
+import 'package:omnibuf/grpc.dart';
+import 'package:omnibuf/src/generated/omnibuf/bench/peer.omnibuf.dart';
+
+final codec = OmniBufGrpcCodec<PeerUpdate>(
+  encode: (msg, {options = EncodeOptions.defaults}) =>
+      msg.encode(options: options),
+  decode: PeerUpdate.decode,
+);
+
+final method = ClientMethod<PeerUpdate, PeerUpdate>(
+  '/omnibuf.bench.PeerService/Update',
+  codec.serialize,
+  codec.deserialize,
+);
+```
+
+## Connect RPC
+
+Import the separate `package:omnibuf/connect.dart` entrypoint for `connect-dart` codecs.
+
+```dart
+import 'package:omnibuf/connect.dart';
+
+final schemaCodec = OmniBufConnectCodec.fromSchema(mySchema);
+final bytes = schemaCodec.encode(value);
+final decoded = schemaCodec.decode(bytes);
+```
+
+Set `encodeOptions: EncodeOptions.selfDescribingDefaults` on either codec to emit `Field #0` metadata under codec name `x-omnibuf`.
+
 ## Implementation Details
 
 - **64-bit Dart VM wire codec**: Operates directly on `Uint8List` and `ByteData` with single-pass container pre-sizing and `O(1)` field skipping.
