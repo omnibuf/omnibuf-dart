@@ -110,11 +110,13 @@ Uint8List spliceFields(
     validatePacket(src, validateStrings: true);
   }
   if (patches.isEmpty) {
-    // Still validate structural framing of src.
-    final r = OmniBufReader(src);
-    while (r.hasMore) {
-      final tag = r.readTag();
-      fastSkipValue(r, tag & 0x0F);
+    // Still validate structural framing of src when full validation was skipped.
+    if (!validate) {
+      final r = OmniBufReader(src);
+      while (r.hasMore) {
+        final tag = r.readTag();
+        fastSkipValue(r, tag & 0x0F);
+      }
     }
     if (writer != null) {
       if (prefix != null && prefix.isNotEmpty) {
@@ -218,15 +220,19 @@ abstract class OpaqueMessage {
   void clearPatches() => _dirty.clear();
 
   /// Splices all pending mutations into [rawBytes], optionally prepending [prefix].
-  Uint8List marshalAppend([Uint8List? prefix]) {
+  /// Set [validate] to `true` (or use [tryMarshal]) to run full packet and UTF-8 validation.
+  Uint8List marshalAppend([Uint8List? prefix, bool validate = false]) {
     if (_dirty.isEmpty) {
-      return spliceFields(rawBytes, const [], prefix: prefix);
+      return spliceFields(rawBytes, const [], prefix: prefix, validate: validate);
     }
     final patches = <FieldPatch>[
       for (final e in _dirty.entries) FieldPatch(e.key, e.value),
     ];
-    return spliceFields(rawBytes, patches, prefix: prefix);
+    return spliceFields(rawBytes, patches, prefix: prefix, validate: validate);
   }
+
+  /// Validated alias for [marshalAppend] that runs full packet and UTF-8 validation.
+  Uint8List tryMarshal([Uint8List? prefix]) => marshalAppend(prefix, true);
 
   /// Fast single-field splice into a reusable [OmniBufWriter] (zero extra copy when using [writer.viewBytes]).
   /// Validates structural framing and UTF-8 of [rawBytes] when [validate] is `true` (default).

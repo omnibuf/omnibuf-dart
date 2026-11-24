@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:typed_data';
 
 import 'errors.dart';
+import 'options.dart';
 
 /// OmniBuf v0.1 4-bit wire type codes.
 abstract final class WireType {
@@ -171,11 +172,27 @@ class OmniBufWriter {
   /// Returns a zero-copy view of the written bytes (valid until next mutation/reset).
   Uint8List viewBytes() => Uint8List.sublistView(_buf, 0, _pos);
 
+  static const int _maxGrowShift = 1 << 62;
+
   void _grow(int needed) {
+    if (needed < 0) {
+      throw const OmniBufSerializeException('negative buffer growth requested');
+    }
     final minCap = _pos + needed;
-    var newCap = _buf.length << 1;
-    while (newCap < minCap) {
-      newCap <<= 1;
+    if (minCap < _pos) {
+      throw const OmniBufSerializeException('buffer capacity overflow');
+    }
+    var newCap = _buf.length;
+    if (newCap <= 0) {
+      newCap = minCap;
+    } else {
+      while (newCap < minCap) {
+        if (newCap >= _maxGrowShift) {
+          newCap = minCap;
+          break;
+        }
+        newCap <<= 1;
+      }
     }
     final next = Uint8List(newCap);
     next.setRange(0, _pos, _buf);
@@ -583,18 +600,20 @@ class OmniBufReader {
   }
 
   /// Reads a length-prefixed strict UTF-8 string (`WireString`).
-  String readString() {
+  String readString({DecodeBudget? budget}) {
     final len = readCheckedLength();
     if (len == 0) return '';
+    budget?.consumeBytes(len);
     final start = pos;
     pos += len;
     return decodeStrictUtf8(buf, start, start + len);
   }
 
   /// Reads a length-prefixed raw byte copy (`WireBytes`).
-  Uint8List readBytes() {
+  Uint8List readBytes({DecodeBudget? budget}) {
     final len = readCheckedLength();
     if (len == 0) return Uint8List(0);
+    budget?.consumeBytes(len);
     final out = Uint8List(len);
     out.setRange(0, len, buf, pos);
     pos += len;
@@ -709,12 +728,17 @@ String decodeStrictUtf8(Uint8List buf, int start, int end) {
 
 /// Mutable cumulative element/allocation budget threaded through a single
 /// decode or validation pass so chunked collections or repeated structures
-/// cannot bypass `DecodeOptions.maxCollectionElements`.
+/// cannot bypass `DecodeOptions.maxCollectionElements` or `DecodeOptions.maxAllocBytes`.
 class DecodeBudget {
   final int maxElements;
+  final int maxAllocBytes;
   int elements = 0;
+  int allocBytes = 0;
 
-  DecodeBudget(this.maxElements);
+  DecodeBudget(
+    this.maxElements, {
+    this.maxAllocBytes = DecodeOptions.defaultMaxAllocBytes,
+  });
 
   void consume(int count) {
     if (count < 0 || count > maxElements - elements) {
@@ -723,6 +747,15 @@ class DecodeBudget {
       );
     }
     elements += count;
+  }
+
+  void consumeBytes(int bytes) {
+    if (bytes < 0 || bytes > maxAllocBytes - allocBytes) {
+      throw OmniBufAllocationLimitException(
+        'cumulative allocated bytes exceeds limit $maxAllocBytes',
+      );
+    }
+    allocBytes += bytes;
   }
 }
 
@@ -735,7 +768,7 @@ void skipAndValidateValue(
   int depth,
   int maxDepth, {
   bool inCollection = false,
-  bool validateStrings = false,
+  bool validateStrings = true,
   int maxElements = 16 * 1024 * 1024,
   DecodeBudget? budget,
 }) {
@@ -935,15 +968,9 @@ void validateField0SubMsg(
     final fnum = tag >> 4;
     final wt = tag & 0x0F;
     if (fnum == 0) {
-      validateField0SubMsg(
-        sub,
-        nextDepth,
-        maxDepth,
-        maxElements: effectiveBudget.maxElements,
-        validateStrings: validateStrings,
-        budget: effectiveBudget,
+      throw const OmniBufParseException(
+        'nested Field #0 (SchemaMeta) is not allowed inside SchemaMeta',
       );
-      continue;
     }
     switch (fnum) {
       case 1: // type_name: string
@@ -1072,11 +1099,15 @@ void validateField0SubMsg(
 /// Field #0 metadata, and optionally strict UTF-8 on every `WireString`.
 void validatePacket(
   Uint8List data, {
-  int maxDepth = 32,
+  int maxDepth = DecodeOptions.defaultMaxDepth,
   bool validateStrings = true,
-  int maxElements = 16 * 1024 * 1024,
+  int maxElements = DecodeOptions.defaultMaxCollectionElements,
+  int maxAllocBytes = DecodeOptions.defaultMaxAllocBytes,
 }) {
-  final budget = DecodeBudget(maxElements);
+  if (maxDepth < 1 || maxDepth > DecodeOptions.defaultMaxDepth) {
+    throw RangeError.range(maxDepth, 1, DecodeOptions.defaultMaxDepth, 'maxDepth');
+  }
+  final budget = DecodeBudget(maxElements, maxAllocBytes: maxAllocBytes);
   final r = OmniBufReader(data);
   while (r.hasMore) {
     final tag = r.readTag();
@@ -1152,4 +1183,66 @@ int fastSkipValue(OmniBufReader r, int wireType) {
     default:
       throw OmniBufParseException('unknown wire type $wireType');
   }
+}
+
+/// Byte-wise equality for [Uint8List] values used by generated message classes.
+bool bytesEquals(Uint8List a, Uint8List b) {
+  if (identical(a, b)) return true;
+  if (a.length != b.length) return false;
+  for (var i = 0; i < a.length; i++) {
+    if (a[i] != b[i]) return false;
+  }
+  return true;
+}
+
+/// Byte-wise hash code for [Uint8List] values used by generated message classes.
+int bytesHash(Uint8List b) => Object.hashAll(b);
+
+/// Deep element-wise equality for generated `List` fields (handles `Uint8List` elements).
+bool listEquals<T>(List<T> a, List<T> b) {
+  if (identical(a, b)) return true;
+  if (a.length != b.length) return false;
+  for (var i = 0; i < a.length; i++) {
+    final ai = a[i];
+    final bi = b[i];
+    if (ai is Uint8List && bi is Uint8List) {
+      if (!bytesEquals(ai, bi)) return false;
+    } else if (ai != bi) {
+      return false;
+    }
+  }
+  return true;
+}
+
+/// Deep element-wise hash code for generated `List` fields.
+int listHash(List<Object?> list) => Object.hashAll(
+      list.map((e) => e is Uint8List ? bytesHash(e) : e),
+    );
+
+/// Deep entry-wise equality for generated `Map` fields (handles `Uint8List` values).
+bool mapEquals<K, V>(Map<K, V> a, Map<K, V> b) {
+  if (identical(a, b)) return true;
+  if (a.length != b.length) return false;
+  for (final entry in a.entries) {
+    if (!b.containsKey(entry.key)) return false;
+    final av = entry.value;
+    final bv = b[entry.key];
+    if (av is Uint8List && bv is Uint8List) {
+      if (!bytesEquals(av, bv)) return false;
+    } else if (av != bv) {
+      return false;
+    }
+  }
+  return true;
+}
+
+/// Deep entry-wise order-independent hash code for generated `Map` fields.
+int mapHash(Map<Object?, Object?> map) {
+  var h = 0;
+  for (final entry in map.entries) {
+    final v = entry.value;
+    final vh = v is Uint8List ? bytesHash(v) : v.hashCode;
+    h ^= Object.hash(entry.key, vh);
+  }
+  return h;
 }

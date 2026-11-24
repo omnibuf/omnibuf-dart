@@ -9,6 +9,9 @@ class DecodeOptions {
   /// Default maximum element count for a single WireArray or WireMap.
   static const int defaultMaxCollectionElements = 16 * 1024 * 1024;
 
+  /// Default maximum cumulative allocated bytes during decode (64 MiB).
+  static const int defaultMaxAllocBytes = 64 * 1024 * 1024;
+
   /// Maximum container depth (`WireSubMsg`, `WireArray`, `WireMap` each add +1).
   final int maxDepth;
 
@@ -18,6 +21,9 @@ class DecodeOptions {
   /// Maximum element or entry count allowed in any single collection.
   final int maxCollectionElements;
 
+  /// Maximum cumulative bytes allocated during a single decode pass.
+  final int maxAllocBytes;
+
   /// When `true`, decoding merges into an existing message instead of resetting
   /// omitted fields.
   final bool merge;
@@ -26,8 +32,30 @@ class DecodeOptions {
     this.maxDepth = defaultMaxDepth,
     this.maxMessageBytes = defaultMaxMessageBytes,
     this.maxCollectionElements = defaultMaxCollectionElements,
+    this.maxAllocBytes = defaultMaxAllocBytes,
     this.merge = false,
   });
+
+  /// Validates resource limit options and returns the validated `maxDepth` in `1..32`.
+  int validatedMaxDepth() {
+    if (maxDepth < 1 || maxDepth > defaultMaxDepth) {
+      throw RangeError.range(maxDepth, 1, defaultMaxDepth, 'maxDepth');
+    }
+    if (maxMessageBytes < 0) {
+      throw RangeError.value(maxMessageBytes, 'maxMessageBytes', 'must be >= 0');
+    }
+    if (maxCollectionElements < 0) {
+      throw RangeError.value(
+        maxCollectionElements,
+        'maxCollectionElements',
+        'must be >= 0',
+      );
+    }
+    if (maxAllocBytes < 0) {
+      throw RangeError.value(maxAllocBytes, 'maxAllocBytes', 'must be >= 0');
+    }
+    return maxDepth;
+  }
 
   /// Default replace-mode decode options.
   static const DecodeOptions defaults = DecodeOptions();

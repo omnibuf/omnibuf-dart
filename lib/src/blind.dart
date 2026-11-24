@@ -150,14 +150,18 @@ Map<String, Object?> decodeBlind(
   DecodeOptions options = DecodeOptions.defaults,
   SchemaMeta? inheritedSchema,
 }) {
+  final maxDepth = options.validatedMaxDepth();
   if (data.length > options.maxMessageBytes) {
     throw OmniBufAllocationLimitException(
       'packet size ${data.length} exceeds maxMessageBytes ${options.maxMessageBytes}',
     );
   }
-  final budget = DecodeBudget(options.maxCollectionElements);
+  final budget = DecodeBudget(
+    options.maxCollectionElements,
+    maxAllocBytes: options.maxAllocBytes,
+  );
   final r = OmniBufReader(data);
-  final msg = _decodeBlindMsg(r, 0, options.maxDepth, budget);
+  final msg = _decodeBlindMsg(r, 0, maxDepth, budget);
   return msg.resolveNames(inheritedSchema);
 }
 
@@ -233,8 +237,9 @@ _BlindMsg _decodeBlindMsg(
           'WireExtended requires ByteLen >= 1',
         );
       }
-      r.pos += len;
-      continue;
+      throw const OmniBufParseException(
+        'unsupported WireExtended type in blind decode',
+      );
     }
     budget.consume(1);
     final prevWt = msg.wireTypes[fnum];
@@ -387,9 +392,9 @@ Object? _decodeBlindValue(
     case WireType.float64:
       return r.readFloat64();
     case WireType.string:
-      return r.readString();
+      return r.readString(budget: budget);
     case WireType.bytes:
-      return r.readBytes();
+      return r.readBytes(budget: budget);
     case WireType.subMsg:
       final nextDepth = depth + 1;
       if (nextDepth > maxDepth) {
@@ -422,8 +427,9 @@ Object? _decodeBlindValue(
               'WireExtended requires ByteLen >= 1',
             );
           }
-          body.pos += eLen;
-          continue;
+          throw const OmniBufParseException(
+            'unsupported WireExtended type in blind decode',
+          );
         }
         final item = _decodeBlindValue(
             body, elemType, nextDepth, maxDepth, budget, true);
@@ -477,7 +483,7 @@ Object? _decodeBlindValue(
       final map = <String, Object?>{};
       String? valInnerSig;
       for (var i = 0; i < count; i++) {
-        final keyStr = _decodeBlindMapKey(body, keyType);
+        final keyStr = _decodeBlindMapKey(body, keyType, budget);
         if (valType == WireType.extended) {
           final eLen = body.readCheckedLength();
           if (eLen < 1) {
@@ -485,8 +491,9 @@ Object? _decodeBlindValue(
               'WireExtended requires ByteLen >= 1',
             );
           }
-          body.pos += eLen;
-          continue;
+          throw const OmniBufParseException(
+            'unsupported WireExtended type in blind decode',
+          );
         }
         final val =
             _decodeBlindValue(body, valType, nextDepth, maxDepth, budget, true);
@@ -535,14 +542,15 @@ Object? _decodeBlindValue(
           'WireExtended requires ByteLen >= 1',
         );
       }
-      r.pos += len;
-      return null;
+      throw const OmniBufParseException(
+        'unsupported WireExtended type in blind decode',
+      );
     default:
       throw OmniBufParseException('unknown wire type $wt');
   }
 }
 
-String _decodeBlindMapKey(OmniBufReader r, int keyType) {
+String _decodeBlindMapKey(OmniBufReader r, int keyType, DecodeBudget budget) {
   switch (keyType) {
     case WireType.uint:
       return uint64ToDecimal(r.readVarint());
@@ -559,7 +567,7 @@ String _decodeBlindMapKey(OmniBufReader r, int keyType) {
     case WireType.sfixed64:
       return r.readSfixed64().toString();
     case WireType.string:
-      return r.readString();
+      return r.readString(budget: budget);
     default:
       throw OmniBufParseException('invalid WireMap KeyType $keyType');
   }
@@ -611,13 +619,10 @@ void _writeJsonValue(StringBuffer sb, Object? val) {
 }
 
 void _writeJsonFloat(StringBuffer sb, double v, {required bool isFloat32}) {
-  if (v.isNaN) {
-    sb.write('"NaN"');
-    return;
-  }
-  if (v.isInfinite) {
-    sb.write(v.isNegative ? '"-Infinity"' : '"Infinity"');
-    return;
+  if (v.isNaN || v.isInfinite) {
+    throw OmniBufSerializeException(
+      'non-finite float ($v) cannot be serialized to JSON',
+    );
   }
   if (v == 0.0) {
     sb.write(v.isNegative ? '-0' : '0');

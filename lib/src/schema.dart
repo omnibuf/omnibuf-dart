@@ -336,6 +336,7 @@ class OmniBufSchema<T> {
     T dst, {
     DecodeOptions options = DecodeOptions.defaults,
   }) {
+    options.validatedMaxDepth();
     if (data.length > options.maxMessageBytes) {
       throw OmniBufAllocationLimitException(
         'packet size ${data.length} exceeds maxMessageBytes ${options.maxMessageBytes}',
@@ -344,7 +345,10 @@ class OmniBufSchema<T> {
     if (!options.merge) {
       _resetMessage(dst);
     }
-    final budget = DecodeBudget(options.maxCollectionElements);
+    final budget = DecodeBudget(
+      options.maxCollectionElements,
+      maxAllocBytes: options.maxAllocBytes,
+    );
     final r = OmniBufReader(data);
     _decodeBody(r, dst, 0, options, budget);
   }
@@ -484,9 +488,9 @@ class OmniBufSchema<T> {
       case OmniFieldKind.float64:
         f.set(dst, r.readFloat64());
       case OmniFieldKind.string:
-        f.set(dst, r.readString());
+        f.set(dst, r.readString(budget: budget));
       case OmniFieldKind.bytes:
-        f.set(dst, r.readBytes());
+        f.set(dst, r.readBytes(budget: budget));
       case OmniFieldKind.message:
         final nextDepth = depth + 1;
         if (nextDepth > options.maxDepth) {
@@ -686,9 +690,9 @@ Object? _readCollectionValue(
     case OmniFieldKind.float64:
       return r.readFloat64();
     case OmniFieldKind.string:
-      return r.readString();
+      return r.readString(budget: budget);
     case OmniFieldKind.bytes:
-      return r.readBytes();
+      return r.readBytes(budget: budget);
     case OmniFieldKind.message:
       final nextDepth = depth + 1;
       if (nextDepth > options.maxDepth) {

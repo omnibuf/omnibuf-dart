@@ -149,6 +149,7 @@ abstract final class ProtobufOmniBufCodec {
     GeneratedMessage dst, {
     DecodeOptions options = DecodeOptions.defaults,
   }) {
+    options.validatedMaxDepth();
     if (data.length > options.maxMessageBytes) {
       throw OmniBufAllocationLimitException(
         'packet size ${data.length} exceeds maxMessageBytes ${options.maxMessageBytes}',
@@ -157,7 +158,10 @@ abstract final class ProtobufOmniBufCodec {
     if (!options.merge) {
       dst.clear();
     }
-    final budget = DecodeBudget(options.maxCollectionElements);
+    final budget = DecodeBudget(
+      options.maxCollectionElements,
+      maxAllocBytes: options.maxAllocBytes,
+    );
     final r = OmniBufReader(data);
     _decodeBody(r, dst, 0, options, budget);
   }
@@ -443,9 +447,9 @@ abstract final class ProtobufOmniBufCodec {
     if (base == _pbBool) {
       dst.setField(tag, wt == WireType.boolTrue);
     } else if (base == _pbBytes) {
-      dst.setField(tag, r.readBytes());
+      dst.setField(tag, r.readBytes(budget: budget));
     } else if (base == _pbString) {
-      dst.setField(tag, r.readString());
+      dst.setField(tag, r.readString(budget: budget));
     } else if (base == _pbDouble) {
       dst.setField(tag, r.readFloat64());
     } else if (base == _pbFloat) {
@@ -557,9 +561,9 @@ abstract final class ProtobufOmniBufCodec {
     if (base == _pbBool) {
       return r.readCollectionBool();
     } else if (base == _pbBytes) {
-      return r.readBytes();
+      return r.readBytes(budget: budget);
     } else if (base == _pbString) {
-      return r.readString();
+      return r.readString(budget: budget);
     } else if (base == _pbDouble) {
       return r.readFloat64();
     } else if (base == _pbFloat) {

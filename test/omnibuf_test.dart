@@ -908,5 +908,188 @@ void main() {
         throwsA(isA<FormatException>()),
       );
     });
+
+    test('unknown field with invalid UTF-8 is rejected across all tiers', () {
+      final w = OmniBufWriter()
+        ..writeTag(999, WireType.string)
+        ..writeVarint(2)
+        ..writeByte(0xFF)
+        ..writeByte(0xFE);
+      final badUnknown = w.toBytes();
+
+      expect(
+        () => gen_peer.PeerUpdate.decode(badUnknown),
+        throwsA(isA<OmniBufInvalidUtf8Exception>()),
+      );
+      expect(
+        () => ProtobufOmniBufCodec.decodeInto(badUnknown, _PbTestMsg()),
+        throwsA(isA<OmniBufInvalidUtf8Exception>()),
+      );
+      final schema = OmniBufSchema<_TypedCollectionObj>(
+        name: 'T',
+        create: _TypedCollectionObj.new,
+        fields: const [],
+      );
+      expect(
+        () => schema.decode(badUnknown),
+        throwsA(isA<OmniBufInvalidUtf8Exception>()),
+      );
+    });
+
+    test('DecodeOptions validates maxDepth 1..32 and enforces maxAllocBytes',
+        () {
+      final valid = gen_peer.PeerUpdate(routerId: 'abcdefghij').encode();
+      expect(
+        () => decodeBlind(valid, options: const DecodeOptions(maxDepth: 0)),
+        throwsA(isA<RangeError>()),
+      );
+      expect(
+        () => decodeBlind(valid, options: const DecodeOptions(maxDepth: -5)),
+        throwsA(isA<RangeError>()),
+      );
+      expect(
+        () => decodeBlind(valid, options: const DecodeOptions(maxDepth: 33)),
+        throwsA(isA<RangeError>()),
+      );
+      expect(
+        () => validatePacket(valid, maxDepth: 0),
+        throwsA(isA<RangeError>()),
+      );
+      expect(
+        () => validatePacket(valid, maxDepth: 64),
+        throwsA(isA<RangeError>()),
+      );
+      expect(
+        () => decodeBlind(
+          valid,
+          options: const DecodeOptions(maxAllocBytes: 5),
+        ),
+        throwsA(isA<OmniBufAllocationLimitException>()),
+      );
+      expect(
+        () => decodeBlind(
+          valid,
+          options: const DecodeOptions(maxAllocBytes: 100),
+        ),
+        returnsNormally,
+      );
+    });
+
+    test('OpaqueMessage.marshalAppend supports fast default and validated tryMarshal',
+        () {
+      final w = OmniBufWriter()
+        ..writeTag(2, WireType.string)
+        ..writeVarint(2)
+        ..writeByte(0xFF)
+        ..writeByte(0xFE);
+      final badBytes = w.toBytes();
+      final op = gen_peer.OpaquePeerUpdate(badBytes);
+
+      // Default marshalAppend skips deep UTF-8 scan for speed
+      expect(op.marshalAppend(), badBytes);
+      // Explicit validate: true and tryMarshal reject invalid UTF-8
+      expect(
+        () => op.marshalAppend(null, true),
+        throwsA(isA<OmniBufInvalidUtf8Exception>()),
+      );
+      expect(
+        () => op.tryMarshal(),
+        throwsA(isA<OmniBufInvalidUtf8Exception>()),
+      );
+    });
+
+    test('decodeBlind rejects WireExtended and decodeBlindJson rejects non-finite floats',
+        () {
+      // Top-level WireExtended (fnum=1, wt=15, len=2, extType=1, payload=0xAA)
+      final extW = OmniBufWriter()
+        ..writeTag(1, WireType.extended)
+        ..writeVarint(2)
+        ..writeByte(1)
+        ..writeByte(0xAA);
+      expect(
+        () => decodeBlind(extW.toBytes()),
+        throwsA(isA<OmniBufParseException>()),
+      );
+
+      // Non-finite floats in decodeBlind vs decodeBlindJson
+      for (final badFloat in [
+        double.nan,
+        double.infinity,
+        double.negativeInfinity,
+      ]) {
+        final fw = OmniBufWriter()
+          ..writeTag(1, WireType.float64)
+          ..writeFloat64(badFloat);
+        final wire = fw.toBytes();
+        expect(decodeBlind(wire)['field_1'], isA<double>());
+        expect(
+          () => decodeBlindJson(wire),
+          throwsA(isA<OmniBufSerializeException>()),
+        );
+      }
+    });
+
+    test('rejects nested Field #0 inside SchemaMeta', () {
+      // Outer Field #0 containing an inner Field #0
+      final innerMeta = OmniBufWriter();
+      SchemaMeta(typeName: 'Inner').writeField0(innerMeta);
+      final outer = OmniBufWriter()
+        ..writeByte(WireType.field0EncodedTag)
+        ..writeBytes(innerMeta.toBytes());
+      final pkt = outer.toBytes();
+
+      expect(
+        () => decodeBlind(pkt),
+        throwsA(isA<OmniBufParseException>()),
+      );
+      expect(
+        () => validatePacket(pkt),
+        throwsA(isA<OmniBufParseException>()),
+      );
+      expect(
+        () => SchemaMeta.readFromPacket(pkt),
+        throwsA(isA<OmniBufParseException>()),
+      );
+    });
+
+    test('codegen emits operator ==, hashCode, toString and avoids nested estimateBodyBytes',
+        () {
+      final fd = ProtoFileDescriptor()
+        ..name = 'eq.proto'
+        ..packageName = 'demo';
+      final child = ProtoMessageDescriptor()..name = 'Child';
+      child.fields.add(
+        ProtoFieldDescriptor()
+          ..name = 'x'
+          ..number = 1
+          ..label = 1
+          ..type = 13,
+      );
+      final parent = ProtoMessageDescriptor()..name = 'Parent';
+      parent.fields.addAll([
+        ProtoFieldDescriptor()
+          ..name = 'raw'
+          ..number = 1
+          ..label = 1
+          ..type = 12,
+        ProtoFieldDescriptor()
+          ..name = 'child'
+          ..number = 2
+          ..label = 1
+          ..type = 11
+          ..typeName = '.demo.Child',
+      ]);
+      fd.messages.addAll([child, parent]);
+
+      final req = CodeGeneratorRequest()
+        ..fileToGenerate.add('eq.proto')
+        ..protoFiles.add(fd);
+      final code = generateOmniBufDart(req).files.single.content;
+      expect(code, contains('bool operator ==(Object other)'));
+      expect(code, contains('int get hashCode =>'));
+      expect(code, contains('String toString() =>'));
+      expect(code, contains('ob.bytesEquals(this.raw, other.raw)'));
+      expect(code, isNot(contains('reserveLenAuto(sub.estimateBodyBytes')));
+    });
   });
 }

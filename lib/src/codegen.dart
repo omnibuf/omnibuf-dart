@@ -444,7 +444,13 @@ String _writeScalarCall(String w, int pbType, String expr) {
   }
 }
 
-String _readScalarExpr(String r, int pbType, {bool inCollection = false}) {
+String _readScalarExpr(
+  String r,
+  int pbType, {
+  bool inCollection = false,
+  String? budgetVar,
+}) {
+  final budgetArg = budgetVar != null ? 'budget: $budgetVar' : '';
   switch (pbType) {
     case _PbType.uint32Type:
       return '$r.readUint32()';
@@ -474,9 +480,9 @@ String _readScalarExpr(String r, int pbType, {bool inCollection = false}) {
     case _PbType.doubleType:
       return '$r.readFloat64()';
     case _PbType.stringType:
-      return '$r.readString()';
+      return '$r.readString($budgetArg)';
     case _PbType.bytesType:
-      return '$r.readBytes()';
+      return '$r.readBytes($budgetArg)';
     default:
       return '$r.readVarint()';
   }
@@ -882,13 +888,11 @@ void _generateMessage(
       sb.writeln('        final v = this.$fname[k]!;');
       sb.writeln('        ${_writeScalarCall('w', kf.type, 'k')};');
       if (vf.type == _PbType.messageType) {
-        sb.writeln(
-          '        final vSlot = w.reserveLenAuto(v.estimateBodyBytes(depth + 2));',
-        );
+        sb.writeln('        final vSlot = w.reserveLen2();');
         sb.writeln(
           '        v.encodeInto(w, options: options, depth: depth + 2);',
         );
-        sb.writeln('        w.patchLenAuto(vSlot);');
+        sb.writeln('        w.patchLen2(vSlot);');
       } else {
         sb.writeln('        ${_writeScalarCall('w', vf.type, 'v')};');
       }
@@ -898,50 +902,34 @@ void _generateMessage(
     } else if (f.label == 3) {
       sb.writeln('    if (this.$fname.isNotEmpty) {');
       sb.writeln('      w.writeTag(${f.number}, ob.WireType.array);');
-      if (f.type == _PbType.messageType) {
-        sb.writeln('      var est = 8;');
-        sb.writeln(
-          '      for (var i = 0; i < this.$fname.length; i++) { est += this.$fname[i].estimateBodyBytes(depth + 2); }',
-        );
-        sb.writeln('      final slot = w.reserveLenAuto(est);');
-      } else {
-        sb.writeln('      final slot = w.reserveLen2();');
-      }
+      sb.writeln('      final slot = w.reserveLen2();');
       sb.writeln('      w.writeByte(${_wireTypeConst(f.type)});');
       sb.writeln('      w.writeVarint(this.$fname.length);');
       sb.writeln('      for (var i = 0; i < this.$fname.length; i++) {');
       if (f.type == _PbType.messageType) {
         sb.writeln('        final item = this.$fname[i];');
-        sb.writeln(
-          '        final iSlot = w.reserveLenAuto(item.estimateBodyBytes(depth + 2));',
-        );
+        sb.writeln('        final iSlot = w.reserveLen2();');
         sb.writeln(
           '        item.encodeInto(w, options: options, depth: depth + 2);',
         );
-        sb.writeln('        w.patchLenAuto(iSlot);');
+        sb.writeln('        w.patchLen2(iSlot);');
       } else {
         sb.writeln(
           '        ${_writeScalarCall('w', f.type, 'this.$fname[i]')};',
         );
       }
       sb.writeln('      }');
-      if (f.type == _PbType.messageType) {
-        sb.writeln('      w.patchLenAuto(slot);');
-      } else {
-        sb.writeln('      w.patchLen2(slot);');
-      }
+      sb.writeln('      w.patchLen2(slot);');
       sb.writeln('    }');
     } else if (f.type == _PbType.messageType) {
       sb.writeln('    if (this.$fname != null) {');
       sb.writeln('      final sub = this.$fname!;');
       sb.writeln('      w.writeTag(${f.number}, ob.WireType.subMsg);');
-      sb.writeln(
-        '      final slot = w.reserveLenAuto(sub.estimateBodyBytes(depth + 1));',
-      );
+      sb.writeln('      final slot = w.reserveLen2();');
       sb.writeln(
         '      sub.encodeInto(w, options: options, depth: depth + 1);',
       );
-      sb.writeln('      w.patchLenAuto(slot);');
+      sb.writeln('      w.patchLen2(slot);');
       sb.writeln('    }');
     } else if (f.type == _PbType.boolType) {
       sb.writeln('    if (this.$fname) {');
@@ -971,6 +959,7 @@ void _generateMessage(
   sb.writeln(
     '  void decodeInto(Uint8List data, {ob.DecodeOptions options = ob.DecodeOptions.defaults}) {',
   );
+  sb.writeln('    options.validatedMaxDepth();');
   sb.writeln('    if (data.length > options.maxMessageBytes) {');
   sb.writeln(
     "      throw ob.OmniBufAllocationLimitException('packet size \${data.length} exceeds maxMessageBytes \${options.maxMessageBytes}');",
@@ -980,7 +969,8 @@ void _generateMessage(
   sb.writeln('      reset();');
   sb.writeln('    }');
   sb.writeln(
-      '    final budget = ob.DecodeBudget(options.maxCollectionElements);');
+    '    final budget = ob.DecodeBudget(options.maxCollectionElements, maxAllocBytes: options.maxAllocBytes);',
+  );
   sb.writeln('    final r = ob.OmniBufReader(data);');
   sb.writeln('    decodeBody(r, 0, options, budget);');
   sb.writeln('  }');
@@ -991,7 +981,7 @@ void _generateMessage(
     '  void decodeBody(ob.OmniBufReader r, int depth, ob.DecodeOptions options, [ob.DecodeBudget? budget]) {',
   );
   sb.writeln(
-    '    final activeBudget = budget ?? ob.DecodeBudget(options.maxCollectionElements);',
+    '    final activeBudget = budget ?? ob.DecodeBudget(options.maxCollectionElements, maxAllocBytes: options.maxAllocBytes);',
   );
   sb.writeln('    while (r.hasMore) {');
   sb.writeln('      final tag = r.readTag();');
@@ -1039,7 +1029,7 @@ void _generateMessage(
       sb.writeln('          }');
       sb.writeln('          for (var i = 0; i < count; i++) {');
       sb.writeln(
-        '            final k = ${_readScalarExpr('body', kf.type, inCollection: true)};',
+        '            final k = ${_readScalarExpr('body', kf.type, inCollection: true, budgetVar: 'activeBudget')};',
       );
       if (vf.type == _PbType.messageType) {
         final vt = typeOf(vf.typeName);
@@ -1061,7 +1051,7 @@ void _generateMessage(
         sb.writeln('            this.$fname[k] = v;');
       } else {
         sb.writeln(
-          '            this.$fname[k] = ${_readScalarExpr('body', vf.type, inCollection: true)};',
+          '            this.$fname[k] = ${_readScalarExpr('body', vf.type, inCollection: true, budgetVar: 'activeBudget')};',
         );
       }
       sb.writeln('          }');
@@ -1118,7 +1108,7 @@ void _generateMessage(
         sb.writeln('            this.$fname.add(item);');
       } else {
         sb.writeln(
-          '            this.$fname.add(${_readScalarExpr('body', f.type, inCollection: true)});',
+          '            this.$fname.add(${_readScalarExpr('body', f.type, inCollection: true, budgetVar: 'activeBudget')});',
         );
       }
       sb.writeln('          }');
@@ -1167,7 +1157,9 @@ void _generateMessage(
       );
       sb.writeln('            break;');
       sb.writeln('          }');
-      sb.writeln('          this.$fname = ${_readScalarExpr('r', f.type)};');
+      sb.writeln(
+        '          this.$fname = ${_readScalarExpr('r', f.type, budgetVar: 'activeBudget')};',
+      );
     }
   }
   sb.writeln('        default:');
@@ -1177,6 +1169,67 @@ void _generateMessage(
   sb.writeln('      }');
   sb.writeln('    }');
   sb.writeln('  }');
+  sb.writeln();
+
+  // operator ==
+  sb.writeln('  @override');
+  sb.writeln('  bool operator ==(Object other) {');
+  sb.writeln('    if (identical(this, other)) return true;');
+  sb.writeln('    if (other is! $className) return false;');
+  if (sortedFields.isEmpty) {
+    sb.writeln('    return true;');
+  } else {
+    final checks = <String>[];
+    for (final f in sortedFields) {
+      final fname = fieldNames[f.number]!;
+      if (isMapField(f)) {
+        checks.add('ob.mapEquals(this.$fname, other.$fname)');
+      } else if (f.label == 3) {
+        checks.add('ob.listEquals(this.$fname, other.$fname)');
+      } else if (f.type == _PbType.bytesType) {
+        checks.add('ob.bytesEquals(this.$fname, other.$fname)');
+      } else {
+        checks.add('this.$fname == other.$fname');
+      }
+    }
+    sb.writeln('    return ${checks.join(' &&\n        ')};');
+  }
+  sb.writeln('  }');
+  sb.writeln();
+
+  // hashCode
+  sb.writeln('  @override');
+  if (sortedFields.isEmpty) {
+    sb.writeln('  int get hashCode => 0;');
+  } else {
+    final hashExprs = <String>[];
+    for (final f in sortedFields) {
+      final fname = fieldNames[f.number]!;
+      if (isMapField(f)) {
+        hashExprs.add('ob.mapHash(this.$fname)');
+      } else if (f.label == 3) {
+        hashExprs.add('ob.listHash(this.$fname)');
+      } else if (f.type == _PbType.bytesType) {
+        hashExprs.add('ob.bytesHash(this.$fname)');
+      } else {
+        hashExprs.add('this.$fname');
+      }
+    }
+    sb.writeln('  int get hashCode => Object.hashAll([${hashExprs.join(', ')}]);');
+  }
+  sb.writeln();
+
+  // toString()
+  sb.writeln('  @override');
+  if (sortedFields.isEmpty) {
+    sb.writeln("  String toString() => '$className()';");
+  } else {
+    final parts = <String>[
+      for (final f in sortedFields)
+        '${fieldNames[f.number]!}: \${this.${fieldNames[f.number]!}}',
+    ];
+    sb.writeln("  String toString() => '$className(${parts.join(', ')})';");
+  }
   sb.writeln('}');
   sb.writeln();
 
@@ -1274,11 +1327,9 @@ void _generateMessage(
       sb.writeln('      final v = value[k]!;');
       sb.writeln('      ${_writeScalarCall('w', kf.type, 'k')};');
       if (vf.type == _PbType.messageType) {
-        sb.writeln(
-          '      final vSlot = w.reserveLenAuto(v.estimateBodyBytes(2));',
-        );
+        sb.writeln('      final vSlot = w.reserveLen2();');
         sb.writeln('      v.encodeInto(w, depth: 2);');
-        sb.writeln('      w.patchLenAuto(vSlot);');
+        sb.writeln('      w.patchLen2(vSlot);');
       } else {
         sb.writeln('      ${_writeScalarCall('w', vf.type, 'v')};');
       }
@@ -1357,11 +1408,9 @@ void _generateMessage(
       sb.writeln('    for (var i = 0; i < value.length; i++) {');
       if (f.type == _PbType.messageType) {
         sb.writeln('      final item = value[i];');
-        sb.writeln(
-          '      final iSlot = w.reserveLenAuto(item.estimateBodyBytes(2));',
-        );
+        sb.writeln('      final iSlot = w.reserveLen2();');
         sb.writeln('      item.encodeInto(w, depth: 2);');
-        sb.writeln('      w.patchLenAuto(iSlot);');
+        sb.writeln('      w.patchLen2(iSlot);');
       } else {
         sb.writeln('      ${_writeScalarCall('w', f.type, 'value[i]')};');
       }

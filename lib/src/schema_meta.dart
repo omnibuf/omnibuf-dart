@@ -190,19 +190,14 @@ class SchemaMeta {
       final fnum = tag >> 4;
       final wt = tag & 0x0F;
       if (fnum == 0) {
-        validateField0SubMsg(
-          sub,
-          nextDepth,
-          maxDepth,
-          maxElements: effectiveBudget.maxElements,
-          budget: effectiveBudget,
+        throw const OmniBufParseException(
+          'nested Field #0 (SchemaMeta) is not allowed inside SchemaMeta',
         );
-        continue;
       }
       switch (fnum) {
         case 1: // type_name
           if (wt == WireType.string) {
-            meta.typeName = sub.readString();
+            meta.typeName = sub.readString(budget: effectiveBudget);
           } else {
             skipAndValidateValue(
               sub,
@@ -238,7 +233,7 @@ class SchemaMeta {
                   'SchemaMeta.fields key $k out of valid field number range',
                 );
               }
-              final v = mBody.readString();
+              final v = mBody.readString(budget: effectiveBudget);
               rawFields[k] = v;
             }
             if (mBody.pos != mEnd) {
@@ -340,8 +335,12 @@ class SchemaMeta {
     Uint8List data, {
     int maxDepth = DecodeOptions.defaultMaxDepth,
     int maxElements = DecodeOptions.defaultMaxCollectionElements,
+    int maxAllocBytes = DecodeOptions.defaultMaxAllocBytes,
   }) {
-    final budget = DecodeBudget(maxElements);
+    if (maxDepth < 1 || maxDepth > DecodeOptions.defaultMaxDepth) {
+      throw RangeError.range(maxDepth, 1, DecodeOptions.defaultMaxDepth, 'maxDepth');
+    }
+    final budget = DecodeBudget(maxElements, maxAllocBytes: maxAllocBytes);
     final r = OmniBufReader(data);
     SchemaMeta? merged;
     while (r.hasMore) {
