@@ -7,13 +7,22 @@ import 'options.dart';
 import 'schema_meta.dart';
 import 'wire.dart';
 
-/// Metadata annotation for declaring an OmniBuf message class.
+/// Compile-time metadata annotation marking a Dart class as an OmniBuf message.
+///
+/// Dart AOT builds do not support runtime reflection (`dart:mirrors`), so wire
+/// serialization is executed by an explicit [OmniBufSchema] instance. Use
+/// `@OmniBufMessage` alongside `@OmniBufField` to document the canonical wire
+/// message name directly on the model class.
 class OmniBufMessage {
   final String name;
   const OmniBufMessage(this.name);
 }
 
-/// Metadata annotation for declaring an OmniBuf field on a Dart class.
+/// Compile-time metadata annotation documenting an OmniBuf field number and
+/// wire kind on a Dart class property.
+///
+/// Pair this annotation with a matching [OmniFieldDef] in [OmniBufSchema] to
+/// keep model declarations self-documenting without runtime reflection.
 class OmniBufField {
   final int id;
   final String? name;

@@ -4,7 +4,7 @@ import 'dart:typed_data';
 import 'errors.dart';
 import 'options.dart';
 
-/// OmniBuf v0.1 4-bit wire type codes.
+/// OmniBuf v1 DRAFT-1 4-bit wire type codes.
 abstract final class WireType {
   static const int uint = 0;
   static const int sint = 1;

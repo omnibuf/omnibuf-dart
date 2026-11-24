@@ -48,7 +48,7 @@ class _BlindMsg {
   SchemaMeta? meta;
   final Map<int, Object?> fields = <int, Object?>{};
   final Map<int, int> wireTypes = <int, int>{};
-  final Map<int, String> shapeSignatures = <int, String>{};
+  final Map<int, _ContainerShape> shapeSignatures = <int, _ContainerShape>{};
 
   _BlindMsg();
 
@@ -118,27 +118,67 @@ class _BlindMsg {
   }
 }
 
-/// Unifies two container shape signatures, treating a less-specific signature
-/// from an empty inner container (e.g. `A(13)`) as compatible with a
-/// more-specific signature (e.g. `A(13:A(0))`) and returning the more-specific
-/// signature. Returns `null` if the two signatures conflict.
-String? _unifyShapeSignature(String a, String b) {
-  if (a == b) return a;
-  if (a.length < 4 || b.length < 4 || a[0] != b[0]) return null;
-  final aBody = a.substring(2, a.length - 1);
-  final bBody = b.substring(2, b.length - 1);
-  final aColon = aBody.indexOf(':');
-  final bColon = bBody.indexOf(':');
-  final aHead = aColon >= 0 ? aBody.substring(0, aColon) : aBody;
-  final bHead = bColon >= 0 ? bBody.substring(0, bColon) : bBody;
-  if (aHead != bHead) return null;
-  if (aColon < 0) return b;
-  if (bColon < 0) return a;
-  final aInner = aBody.substring(aColon + 1);
-  final bInner = bBody.substring(bColon + 1);
-  final unifiedInner = _unifyShapeSignature(aInner, bInner);
-  if (unifiedInner == null) return null;
-  return '${a[0]}($aHead:$unifiedInner)';
+/// Structural shape of a blind-decoded container (`WireArray` or `WireMap`).
+///
+/// Unification treats a less-specific shape from an empty inner container
+/// (where [inner] is `null`) as compatible with a more-specific shape and
+/// returns the more-specific shape.
+sealed class _ContainerShape {
+  const _ContainerShape();
+
+  /// Unifies this shape with [other], returning `null` if they conflict.
+  _ContainerShape? unify(_ContainerShape other) => switch ((this, other)) {
+        (final _ArrayShape a, final _ArrayShape b)
+            when a.elementType == b.elementType =>
+          _unifyInner(
+            a.inner,
+            b.inner,
+            (inner) => _ArrayShape(a.elementType, inner),
+          ),
+        (final _MapShape a, final _MapShape b)
+            when a.keyType == b.keyType && a.valueType == b.valueType =>
+          _unifyInner(
+            a.inner,
+            b.inner,
+            (inner) => _MapShape(a.keyType, a.valueType, inner),
+          ),
+        _ => null,
+      };
+
+  static _ContainerShape? _unifyInner(
+    _ContainerShape? a,
+    _ContainerShape? b,
+    _ContainerShape Function(_ContainerShape? inner) rebuild,
+  ) {
+    if (a == null) return rebuild(b);
+    if (b == null) return rebuild(a);
+    final unified = a.unify(b);
+    return unified == null ? null : rebuild(unified);
+  }
+}
+
+final class _ArrayShape extends _ContainerShape {
+  final int elementType;
+  final _ContainerShape? inner;
+
+  const _ArrayShape(this.elementType, [this.inner]);
+
+  @override
+  String toString() =>
+      inner != null ? 'A($elementType:$inner)' : 'A($elementType)';
+}
+
+final class _MapShape extends _ContainerShape {
+  final int keyType;
+  final int valueType;
+  final _ContainerShape? inner;
+
+  const _MapShape(this.keyType, this.valueType, [this.inner]);
+
+  @override
+  String toString() => inner != null
+      ? 'M($keyType,$valueType:$inner)'
+      : 'M($keyType,$valueType)';
 }
 
 /// Decodes an arbitrary OmniBuf packet without an external schema (Tier 4).
@@ -193,15 +233,15 @@ bool _sameLogicalWireType(int a, int b) {
 }
 
 class _BlindArrayResult {
-  final String signature;
+  final _ContainerShape shape;
   final List<Object?> items;
-  const _BlindArrayResult(this.signature, this.items);
+  const _BlindArrayResult(this.shape, this.items);
 }
 
 class _BlindMapResult {
-  final String signature;
+  final _ContainerShape shape;
   final Map<String, Object?> entries;
-  const _BlindMapResult(this.signature, this.entries);
+  const _BlindMapResult(this.shape, this.entries);
 }
 
 _BlindMsg _decodeBlindMsg(
@@ -253,15 +293,15 @@ _BlindMsg _decodeBlindMsg(
       final arr = rawVal as _BlindArrayResult;
       final prevSig = msg.shapeSignatures[fnum];
       if (prevSig != null) {
-        final unified = _unifyShapeSignature(prevSig, arr.signature);
+        final unified = prevSig.unify(arr.shape);
         if (unified == null) {
           throw OmniBufParseException(
-            'WireArray shape change on field #$fnum: $prevSig -> ${arr.signature}',
+            'WireArray shape change on field #$fnum: $prevSig -> ${arr.shape}',
           );
         }
         msg.shapeSignatures[fnum] = unified;
       } else {
-        msg.shapeSignatures[fnum] = arr.signature;
+        msg.shapeSignatures[fnum] = arr.shape;
       }
       if (prevWt != null) {
         (msg.fields[fnum] as List<Object?>).addAll(arr.items);
@@ -275,15 +315,15 @@ _BlindMsg _decodeBlindMsg(
       final mapRes = rawVal as _BlindMapResult;
       final prevSig = msg.shapeSignatures[fnum];
       if (prevSig != null) {
-        final unified = _unifyShapeSignature(prevSig, mapRes.signature);
+        final unified = prevSig.unify(mapRes.shape);
         if (unified == null) {
           throw OmniBufParseException(
-            'WireMap shape change on field #$fnum: $prevSig -> ${mapRes.signature}',
+            'WireMap shape change on field #$fnum: $prevSig -> ${mapRes.shape}',
           );
         }
         msg.shapeSignatures[fnum] = unified;
       } else {
-        msg.shapeSignatures[fnum] = mapRes.signature;
+        msg.shapeSignatures[fnum] = mapRes.shape;
       }
       if (prevWt != null) {
         (msg.fields[fnum] as Map<String, Object?>).addAll(mapRes.entries);
@@ -324,7 +364,7 @@ void _mergeBlindMsg(_BlindMsg dst, _BlindMsg src) {
       final prevSig = dst.shapeSignatures[fnum];
       final srcSig = src.shapeSignatures[fnum];
       if (prevSig != null && srcSig != null) {
-        final unified = _unifyShapeSignature(prevSig, srcSig);
+        final unified = prevSig.unify(srcSig);
         if (unified == null) {
           throw OmniBufParseException(
             'container shape change on merged field #$fnum: $prevSig -> $srcSig',
@@ -418,7 +458,7 @@ Object? _decodeBlindValue(
           body.readArrayHeader(maxElements: budget.maxElements);
       budget.consume(count);
       final list = <Object?>[];
-      String? innerSig;
+      _ContainerShape? innerShape;
       for (var i = 0; i < count; i++) {
         if (elemType == WireType.extended) {
           final eLen = body.readCheckedLength();
@@ -434,29 +474,29 @@ Object? _decodeBlindValue(
         final item = _decodeBlindValue(
             body, elemType, nextDepth, maxDepth, budget, true);
         if (item is _BlindArrayResult) {
-          if (innerSig != null) {
-            final unified = _unifyShapeSignature(innerSig, item.signature);
+          if (innerShape != null) {
+            final unified = innerShape.unify(item.shape);
             if (unified == null) {
               throw const OmniBufParseException(
                 'nested WireArray inner ElementType conflict',
               );
             }
-            innerSig = unified;
+            innerShape = unified;
           } else {
-            innerSig = item.signature;
+            innerShape = item.shape;
           }
           list.add(item.items);
         } else if (item is _BlindMapResult) {
-          if (innerSig != null) {
-            final unified = _unifyShapeSignature(innerSig, item.signature);
+          if (innerShape != null) {
+            final unified = innerShape.unify(item.shape);
             if (unified == null) {
               throw const OmniBufParseException(
                 'nested WireMap inner type conflict',
               );
             }
-            innerSig = unified;
+            innerShape = unified;
           } else {
-            innerSig = item.signature;
+            innerShape = item.shape;
           }
           list.add(item.entries);
         } else {
@@ -467,8 +507,7 @@ Object? _decodeBlindValue(
         throw const OmniBufParseException('WireArray trailing bytes');
       }
       r.pos = bodyEnd;
-      final sig = innerSig != null ? 'A($elemType:$innerSig)' : 'A($elemType)';
-      return _BlindArrayResult(sig, list);
+      return _BlindArrayResult(_ArrayShape(elemType, innerShape), list);
     case WireType.map:
       final nextDepth = depth + 1;
       if (nextDepth > maxDepth) {
@@ -481,7 +520,7 @@ Object? _decodeBlindValue(
           body.readMapHeader(maxElements: budget.maxElements);
       budget.consume(count);
       final map = <String, Object?>{};
-      String? valInnerSig;
+      _ContainerShape? valInnerShape;
       for (var i = 0; i < count; i++) {
         final keyStr = _decodeBlindMapKey(body, keyType, budget);
         if (valType == WireType.extended) {
@@ -498,29 +537,29 @@ Object? _decodeBlindValue(
         final val =
             _decodeBlindValue(body, valType, nextDepth, maxDepth, budget, true);
         if (val is _BlindArrayResult) {
-          if (valInnerSig != null) {
-            final unified = _unifyShapeSignature(valInnerSig, val.signature);
+          if (valInnerShape != null) {
+            final unified = valInnerShape.unify(val.shape);
             if (unified == null) {
               throw const OmniBufParseException(
                 'nested WireMap value array type conflict',
               );
             }
-            valInnerSig = unified;
+            valInnerShape = unified;
           } else {
-            valInnerSig = val.signature;
+            valInnerShape = val.shape;
           }
           map[keyStr] = val.items;
         } else if (val is _BlindMapResult) {
-          if (valInnerSig != null) {
-            final unified = _unifyShapeSignature(valInnerSig, val.signature);
+          if (valInnerShape != null) {
+            final unified = valInnerShape.unify(val.shape);
             if (unified == null) {
               throw const OmniBufParseException(
                 'nested WireMap value map type conflict',
               );
             }
-            valInnerSig = unified;
+            valInnerShape = unified;
           } else {
-            valInnerSig = val.signature;
+            valInnerShape = val.shape;
           }
           map[keyStr] = val.entries;
         } else {
@@ -531,10 +570,7 @@ Object? _decodeBlindValue(
         throw const OmniBufParseException('WireMap trailing bytes');
       }
       r.pos = bodyEnd;
-      final sig = valInnerSig != null
-          ? 'M($keyType,$valType:$valInnerSig)'
-          : 'M($keyType,$valType)';
-      return _BlindMapResult(sig, map);
+      return _BlindMapResult(_MapShape(keyType, valType, valInnerShape), map);
     case WireType.extended:
       final len = r.readCheckedLength();
       if (len < 1) {

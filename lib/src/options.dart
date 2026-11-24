@@ -1,6 +1,6 @@
 /// Options controlling OmniBuf wire decoding and validation budgets.
 class DecodeOptions {
-  /// Default maximum container nesting depth (OmniBuf v0.1 spec Section 10).
+  /// Default maximum container nesting depth (OmniBuf v1 DRAFT-1 spec Section 10).
   static const int defaultMaxDepth = 32;
 
   /// Default maximum root message size in bytes (64 MiB).

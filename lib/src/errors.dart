@@ -9,7 +9,7 @@ sealed class OmniBufException implements Exception {
   String toString() => '$runtimeType: $message';
 }
 
-/// Thrown when wire bytes violate the OmniBuf v0.1 specification.
+/// Thrown when wire bytes violate the OmniBuf v1 DRAFT-1 specification.
 class OmniBufParseException extends OmniBufException {
   const OmniBufParseException(super.message);
 }

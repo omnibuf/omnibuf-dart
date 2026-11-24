@@ -1,26 +1,19 @@
-# OmniBuf for Dart
+# omnibuf-dart
 
-Dart 3 implementation of the [OmniBuf v0.1](https://omnibuf.com/spec) binary wire format.
+[![OmniBuf Spec: v1 DRAFT-1](https://img.shields.io/badge/OmniBuf%20Spec-v1%20DRAFT--1-FF4F18)](https://omnibuf.com/spec)
 
-## Features
+Dart 3 implementation of the [OmniBuf v1 DRAFT-1 wire specification](https://omnibuf.com/spec). Documentation and benchmarks live at [omnibuf.com/dart](https://omnibuf.com/dart).
 
-- **Core v0.1 Wire Codec**: All 16 wire types (`WireUint` through `WireExtended`), 1/2/4/9-byte Prefix-Varints with non-minimal decoding and reserved-prefix rejection, 64-bit ZigZag + 32-bit narrowing, strict UTF-8 validation, `O(1)` field skipping, and unsigned UTF-8 byte-order deterministic map sorting.
-- **Field #0 Self-Describing Metadata**: Optional `SchemaMeta` embedding, recursive child propagation, empty-string name clearing, and multi-block merge support.
-- **Tier 1 (`protoc-gen-omnibuf-dart`)**: Generates idiomatic Dart 3 message classes, single-pass `Uint8List`/`ByteData` encoders with 4-byte container pre-sizing, and lazy `Opaque` views for zero-decode field access and in-place wire splicing.
-- **Tier 2 (`package:protobuf`)**: `ProtobufOmniBufCodec` serializes and deserializes standard `GeneratedMessage` instances directly via `BuilderInfo`.
-- **Tier 3 (`OmniBufSchema`)**: Declarative and `@OmniBufMessage` / `@OmniBufField` class schema codec with replace and merge decoding modes.
-- **Tier 4 (`decodeBlind` / `decodeBlindJson`)**: Schema-less packet inspection resolving Field #0 names or `field_<N>` fallback keys.
+## Install
 
-## Installation
-
-Add `omnibuf` to your `pubspec.yaml`:
+Add `omnibuf` to `pubspec.yaml`:
 
 ```yaml
 dependencies:
   omnibuf: ^0.1.0
 ```
 
-## Quick Start
+## Quick Usage
 
 ```dart
 import 'package:omnibuf/omnibuf.dart';
@@ -31,42 +24,30 @@ void main() {
     asn: 64512,
     routerId: 'edge-rtr-fra01',
     active: true,
-    location: Location(city: 'Frankfurt', rack: 42),
     sequence: 100,
   );
 
-  // Single-pass binary encode
   final bytes = msg.encode();
-
-  // Zero-decode nested field read via Opaque view
   final view = OpaquePeerUpdate(bytes);
-  print(view.locationOpaque?.city); // Frankfurt
-
-  // In-place wire splice (untouched fields copy verbatim)
   view.sequence = view.sequence + 1;
   final patched = view.marshalAppend();
-
-  // Schema-less inspection
-  print(decodeBlindJson(patched));
 }
 ```
 
-## Benchmarks
+## Implementation Details
 
-Dart benchmark results, methodology, and cross-language comparisons live at [omnibuf.com/benchmarks?lang=dart](https://omnibuf.com/benchmarks?lang=dart) (all languages at [omnibuf.com/benchmarks](https://omnibuf.com/benchmarks)). Run `just bench` locally to execute the AOT suite and regenerate [`testdata/benchmarks.json`](testdata/benchmarks.json).
+- **64-bit Dart VM wire codec**: Operates directly on `Uint8List` and `ByteData` with single-pass container pre-sizing and `O(1)` field skipping.
+- **`package:protobuf` interop**: `ProtobufOmniBufCodec` encodes and decodes `GeneratedMessage` instances via `BuilderInfo`.
+- **Codegen**: `protoc-gen-omnibuf-dart` emits Dart 3 message classes and lazy `OpaqueMessage` views with `spliceFields` in-place mutation.
+- **Declarative schemas**: `OmniBufSchema` and `@OmniBufMessage` / `@OmniBufField` annotations support replace and merge decoding modes.
+- **Blind decode**: `decodeBlind` and `decodeBlindJson` resolve `Field #0` metadata or `field_<N>` fallback keys.
 
-## Development & Verification
+## Development
 
 ```bash
-just install      # dart pub get
-just proto        # buf lint + regenerate Tier 1 Dart code
-just build        # AOT-compile plugin, conformance adapter, and benchmarks
-just test         # dart test
-just conformance  # Run cross-language conformance-runner (992/992 across all 4 tiers)
-just bench        # Run AOT PeerUpdate benchmarks -> testdata/benchmarks.json
-just ci           # fmt-check + lint + build + test + conformance
+just install && just build && just test && just conformance
 ```
 
 ## License
 
-Apache-2.0. See [LICENSE](LICENSE).
+Apache-2.0. See [LICENSE](./LICENSE).

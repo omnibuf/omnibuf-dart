@@ -1,4 +1,4 @@
-/// OmniBuf v0.1 binary wire format for Dart.
+/// OmniBuf v1 DRAFT-1 binary wire format for Dart.
 ///
 /// Provides:
 /// - Core Prefix-Varint wire primitives, [OmniBufWriter], [OmniBufReader], and

@@ -46,7 +46,7 @@ class SchemaMeta {
     }
   }
 
-  /// Merges [other] into this [SchemaMeta] according to OmniBuf v0.1 Section 8.2:
+  /// Merges [other] into this [SchemaMeta] according to OmniBuf v1 DRAFT-1 Section 8.2:
   /// - Later non-empty `typeName` wins.
   /// - Later `fields` entries override per field number (including `""` clearing to `field_<N>`).
   /// - `children` entries merge recursively by field number.
