@@ -1105,7 +1105,8 @@ void validatePacket(
   int maxAllocBytes = DecodeOptions.defaultMaxAllocBytes,
 }) {
   if (maxDepth < 1 || maxDepth > DecodeOptions.defaultMaxDepth) {
-    throw RangeError.range(maxDepth, 1, DecodeOptions.defaultMaxDepth, 'maxDepth');
+    throw RangeError.range(
+        maxDepth, 1, DecodeOptions.defaultMaxDepth, 'maxDepth');
   }
   final budget = DecodeBudget(maxElements, maxAllocBytes: maxAllocBytes);
   final r = OmniBufReader(data);

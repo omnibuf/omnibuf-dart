@@ -978,6 +978,8 @@ gen_conf.ConformanceResponse _handleBlind(gen_conf.ConformanceRequest req) {
     return gen_conf.ConformanceResponse(omnibufPayload: req.omnibufPayload);
   } on OmniBufParseException catch (e) {
     return gen_conf.ConformanceResponse(parseError: e.message);
+  } on OmniBufSerializeException catch (e) {
+    return gen_conf.ConformanceResponse(serializeError: e.message);
   } catch (e) {
     return gen_conf.ConformanceResponse(runtimeError: e.toString());
   }

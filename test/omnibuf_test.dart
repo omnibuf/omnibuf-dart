@@ -975,7 +975,8 @@ void main() {
       );
     });
 
-    test('OpaqueMessage.marshalAppend supports fast default and validated tryMarshal',
+    test(
+        'OpaqueMessage.marshalAppend supports fast default and validated tryMarshal',
         () {
       final w = OmniBufWriter()
         ..writeTag(2, WireType.string)
@@ -998,7 +999,8 @@ void main() {
       );
     });
 
-    test('decodeBlind rejects WireExtended and decodeBlindJson rejects non-finite floats',
+    test(
+        'decodeBlind rejects WireExtended and decodeBlindJson rejects non-finite floats',
         () {
       // Top-level WireExtended (fnum=1, wt=15, len=2, extType=1, payload=0xAA)
       final extW = OmniBufWriter()
@@ -1052,7 +1054,8 @@ void main() {
       );
     });
 
-    test('codegen emits operator ==, hashCode, toString and avoids nested estimateBodyBytes',
+    test(
+        'codegen emits operator ==, hashCode, toString and avoids nested estimateBodyBytes',
         () {
       final fd = ProtoFileDescriptor()
         ..name = 'eq.proto'

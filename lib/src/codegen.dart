@@ -1215,7 +1215,8 @@ void _generateMessage(
         hashExprs.add('this.$fname');
       }
     }
-    sb.writeln('  int get hashCode => Object.hashAll([${hashExprs.join(', ')}]);');
+    sb.writeln(
+        '  int get hashCode => Object.hashAll([${hashExprs.join(', ')}]);');
   }
   sb.writeln();
 

@@ -223,7 +223,8 @@ abstract class OpaqueMessage {
   /// Set [validate] to `true` (or use [tryMarshal]) to run full packet and UTF-8 validation.
   Uint8List marshalAppend([Uint8List? prefix, bool validate = false]) {
     if (_dirty.isEmpty) {
-      return spliceFields(rawBytes, const [], prefix: prefix, validate: validate);
+      return spliceFields(rawBytes, const [],
+          prefix: prefix, validate: validate);
     }
     final patches = <FieldPatch>[
       for (final e in _dirty.entries) FieldPatch(e.key, e.value),

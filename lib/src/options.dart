@@ -42,7 +42,8 @@ class DecodeOptions {
       throw RangeError.range(maxDepth, 1, defaultMaxDepth, 'maxDepth');
     }
     if (maxMessageBytes < 0) {
-      throw RangeError.value(maxMessageBytes, 'maxMessageBytes', 'must be >= 0');
+      throw RangeError.value(
+          maxMessageBytes, 'maxMessageBytes', 'must be >= 0');
     }
     if (maxCollectionElements < 0) {
       throw RangeError.value(
