@@ -1,6 +1,4 @@
-/// Detached gRPC codec entrypoint for `package:grpc` (`ClientMethod` and
-/// `ServiceMethod`) without adding a runtime dependency on `package:grpc` to
-/// core `package:omnibuf/omnibuf.dart`.
+/// gRPC codec entrypoint for `package:grpc` (`ClientMethod` and `ServiceMethod`).
 library;
 
 import 'dart:typed_data';
@@ -35,7 +33,7 @@ typedef OmniBufGrpcDecode<T> = T Function(
   DecodeOptions options,
 });
 
-/// Detached gRPC codec for `package:grpc` `ClientMethod` and `ServiceMethod`.
+/// gRPC codec for `package:grpc` `ClientMethod` and `ServiceMethod`.
 ///
 /// Supports both `protoc-gen-omnibuf-dart` generated message classes and
 /// declarative [OmniBufSchema] codecs.

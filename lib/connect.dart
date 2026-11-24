@@ -1,5 +1,4 @@
-/// Detached Connect RPC codec entrypoint for `connect-dart` without adding a
-/// runtime dependency on `package:connectrpc` to core `package:omnibuf/omnibuf.dart`.
+/// Connect RPC codec entrypoint for `connect-dart`.
 library;
 
 import 'dart:typed_data';
@@ -27,7 +26,7 @@ typedef OmniBufConnectDecode<T> = T Function(
   DecodeOptions options,
 });
 
-/// Detached Connect RPC codec matching `connect-dart`'s `Codec` shape
+/// Connect RPC codec matching `connect-dart`'s `Codec` shape
 /// (`name`, `encode`, `decode`).
 ///
 /// Supports both `protoc-gen-omnibuf-dart` generated message classes and
