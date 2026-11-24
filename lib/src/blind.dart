@@ -619,10 +619,17 @@ void _writeJsonValue(StringBuffer sb, Object? val) {
 }
 
 void _writeJsonFloat(StringBuffer sb, double v, {required bool isFloat32}) {
-  if (v.isNaN || v.isInfinite) {
-    throw OmniBufSerializeException(
-      'non-finite float ($v) cannot be serialized to JSON',
-    );
+  if (v.isNaN) {
+    sb.write('"NaN"');
+    return;
+  }
+  if (v == double.infinity) {
+    sb.write('"Infinity"');
+    return;
+  }
+  if (v == double.negativeInfinity) {
+    sb.write('"-Infinity"');
+    return;
   }
   if (v == 0.0) {
     sb.write(v.isNegative ? '-0' : '0');

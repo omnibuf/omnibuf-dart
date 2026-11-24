@@ -1000,7 +1000,7 @@ void main() {
     });
 
     test(
-        'decodeBlind rejects WireExtended and decodeBlindJson rejects non-finite floats',
+        'decodeBlind rejects WireExtended and decodeBlindJson encodes non-finite floats',
         () {
       // Top-level WireExtended (fnum=1, wt=15, len=2, extType=1, payload=0xAA)
       final extW = OmniBufWriter()
@@ -1013,21 +1013,18 @@ void main() {
         throwsA(isA<OmniBufParseException>()),
       );
 
-      // Non-finite floats in decodeBlind vs decodeBlindJson
-      for (final badFloat in [
-        double.nan,
-        double.infinity,
-        double.negativeInfinity,
+      // Non-finite floats in decodeBlind vs decodeBlindJson (conformance strings)
+      for (final entry in [
+        (double.nan, '{"field_1":"NaN"}'),
+        (double.infinity, '{"field_1":"Infinity"}'),
+        (double.negativeInfinity, '{"field_1":"-Infinity"}'),
       ]) {
         final fw = OmniBufWriter()
           ..writeTag(1, WireType.float64)
-          ..writeFloat64(badFloat);
+          ..writeFloat64(entry.$1);
         final wire = fw.toBytes();
         expect(decodeBlind(wire)['field_1'], isA<double>());
-        expect(
-          () => decodeBlindJson(wire),
-          throwsA(isA<OmniBufSerializeException>()),
-        );
+        expect(decodeBlindJson(wire), equals(entry.$2));
       }
     });
 
