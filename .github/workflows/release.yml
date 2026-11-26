@@ -1,4 +1,4 @@
-name: Release & Publish to pub.dev
+name: Release
 
 on:
   push:
