@@ -18,6 +18,10 @@ Future<void> main() async {
     final resp = generateOmniBufDart(req);
     stdout.add(resp.encode());
     await stdout.flush();
+  } on FormatException catch (e) {
+    final resp = CodeGeneratorResponse()..error = e.message;
+    stdout.add(resp.encode());
+    await stdout.flush();
   } catch (e, st) {
     final resp = CodeGeneratorResponse()..error = '$e\n$st';
     stdout.add(resp.encode());

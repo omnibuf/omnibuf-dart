@@ -94,6 +94,61 @@ int? findLastBoolField(Uint8List src, int targetFieldNumber) {
   return found;
 }
 
+bool _matchesExpectedWireType(int expectedWt, int actualWt) {
+  if (expectedWt == WireType.boolFalse || expectedWt == WireType.boolTrue) {
+    return actualWt == WireType.boolFalse || actualWt == WireType.boolTrue;
+  }
+  return actualWt == expectedWt;
+}
+
+/// Scans [src] and returns the field number of the **last** matching occurrence
+/// among [expectedWireTypes] (mapping field number to expected wire type, where
+/// `WireType.boolFalse` matches both boolean wire types), or `0` if none match.
+int findLastOneofField(Uint8List src, Map<int, int> expectedWireTypes) {
+  final r = OmniBufReader(src);
+  var active = 0;
+  while (r.hasMore) {
+    final tag = r.readTag();
+    final fnum = tag >> 4;
+    final wt = tag & 0x0F;
+    fastSkipValue(r, wt);
+    final expected = expectedWireTypes[fnum];
+    if (expected != null && _matchesExpectedWireType(expected, wt)) {
+      active = fnum;
+    }
+  }
+  return active;
+}
+
+/// Scans [src] and returns `(valueStart, valueEnd)` slices for the final
+/// contiguous run of [targetFieldNumber] (`WireType.subMsg`) after any other
+/// matching sibling field in [oneofWireTypes]. Returns empty if another sibling
+/// appeared last or [targetFieldNumber] is absent.
+List<(int, int)> findActiveOneofSubMsgFields(
+  Uint8List src,
+  int targetFieldNumber,
+  Map<int, int> oneofWireTypes,
+) {
+  final r = OmniBufReader(src);
+  final found = <(int, int)>[];
+  while (r.hasMore) {
+    final tag = r.readTag();
+    final fnum = tag >> 4;
+    final wt = tag & 0x0F;
+    final valStart = r.pos;
+    final valEnd = fastSkipValue(r, wt);
+    final expected = oneofWireTypes[fnum];
+    if (expected != null && _matchesExpectedWireType(expected, wt)) {
+      if (fnum == targetFieldNumber) {
+        found.add((valStart, valEnd));
+      } else {
+        found.clear();
+      }
+    }
+  }
+  return found;
+}
+
 /// Splices [patches] into [src] without decoding untouched fields, appending
 /// the resulting packet into [dst] (preserving any existing prefix in [dst]).
 ///

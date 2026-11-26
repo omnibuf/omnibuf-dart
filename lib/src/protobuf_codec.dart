@@ -97,8 +97,8 @@ abstract final class ProtobufOmniBufCodec {
       final tag = fi.tagNumber;
       if (fi.isMapField) {
         final mfi = fi as MapFieldInfo<dynamic, dynamic>;
-        final map = msg.getField(tag) as Map<dynamic, dynamic>;
-        if (map.isEmpty) continue;
+        final map = msg.getFieldOrNull(tag) as Map<dynamic, dynamic>?;
+        if (map == null || map.isEmpty) continue;
         final kBase = _pbBaseType(mfi.keyFieldType);
         final vBase = _pbBaseType(mfi.valueFieldType);
         final kWt = _pbBaseToWireType(kBase);
@@ -121,8 +121,8 @@ abstract final class ProtobufOmniBufCodec {
       }
 
       if (fi.isRepeated) {
-        final list = msg.getField(tag) as List<dynamic>;
-        if (list.isEmpty) continue;
+        final list = msg.getFieldOrNull(tag) as List<dynamic>?;
+        if (list == null || list.isEmpty) continue;
         final baseType = _pbBaseType(fi.type);
         final elemWt = _pbBaseToWireType(baseType);
         w.writeTag(tag, WireType.array);
@@ -136,8 +136,18 @@ abstract final class ProtobufOmniBufCodec {
         continue;
       }
 
-      if (!msg.hasField(tag)) continue;
-      final val = msg.getField(tag) as Object;
+      final val = msg.getFieldOrNull(tag) as Object?;
+      if (val == null) {
+        if (_pbBaseType(fi.type) == _pbEnum &&
+            msg.unknownFields.hasField(tag)) {
+          final uf = msg.unknownFields.getField(tag)!;
+          if (uf.varints.isNotEmpty) {
+            w.writeTag(tag, WireType.sint);
+            w.writeSint32(uf.varints.last.toInt());
+          }
+        }
+        continue;
+      }
       _writePbSingularField(w, fi, val, options, depth);
     }
   }
@@ -433,6 +443,32 @@ abstract final class ProtobufOmniBufCodec {
     }
   }
 
+  static void _clearOneofUnknownEnums(GeneratedMessage dst, int tag) {
+    final oneofIndex = dst.info_.oneofs[tag];
+    if (oneofIndex == null) return;
+    for (final entry in dst.info_.oneofs.entries) {
+      if (entry.value == oneofIndex && dst.unknownFields.hasField(entry.key)) {
+        dst.unknownFields.clearField(entry.key);
+      }
+    }
+  }
+
+  static void _clearOneofFields(GeneratedMessage dst, int tag) {
+    final oneofIndex = dst.info_.oneofs[tag];
+    if (oneofIndex == null) {
+      dst.clearField(tag);
+      return;
+    }
+    for (final entry in dst.info_.oneofs.entries) {
+      if (entry.value == oneofIndex) {
+        dst.clearField(entry.key);
+        if (dst.unknownFields.hasField(entry.key)) {
+          dst.unknownFields.clearField(entry.key);
+        }
+      }
+    }
+  }
+
   static void _readPbSingularField(
     OmniBufReader r,
     GeneratedMessage dst,
@@ -444,6 +480,23 @@ abstract final class ProtobufOmniBufCodec {
     DecodeBudget budget,
   ) {
     final tag = fi.tagNumber;
+    if (base == _pbEnum) {
+      final raw = r.readSint32();
+      final ev = fi.valueOf?.call(raw);
+      if (ev != null) {
+        _clearOneofUnknownEnums(dst, tag);
+        dst.setField(tag, ev);
+        if (dst.unknownFields.hasField(tag)) {
+          dst.unknownFields.clearField(tag);
+        }
+      } else {
+        _clearOneofFields(dst, tag);
+        dst.unknownFields.clearField(tag);
+        dst.unknownFields.mergeVarintField(tag, Int64(raw));
+      }
+      return;
+    }
+    _clearOneofUnknownEnums(dst, tag);
     if (base == _pbBool) {
       dst.setField(tag, wt == WireType.boolTrue);
     } else if (base == _pbBytes) {
@@ -454,12 +507,6 @@ abstract final class ProtobufOmniBufCodec {
       dst.setField(tag, r.readFloat64());
     } else if (base == _pbFloat) {
       dst.setField(tag, r.readFloat32());
-    } else if (base == _pbEnum) {
-      final raw = r.readSint32();
-      final ev = fi.valueOf?.call(raw);
-      if (ev != null) {
-        dst.setField(tag, ev);
-      }
     } else if (base == _pbInt32 || base == _pbSint32) {
       dst.setField(tag, r.readSint32());
     } else if (base == _pbUint32) {

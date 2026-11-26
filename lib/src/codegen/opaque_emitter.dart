@@ -8,22 +8,58 @@ void emitOpaqueMessage(
   String className,
   List<ProtoFieldDescriptor> sortedFields,
   Map<int, String> fieldNames,
+  List<int> realOneofIndices,
+  Map<int, String> oneofNames,
+  Map<int, List<ProtoFieldDescriptor>> oneofFields,
   CodegenContext ctx,
 ) {
   sb.writeln('class Opaque$className extends ob.OpaqueMessage {');
   sb.writeln('  Opaque$className(super.rawBytes);');
   sb.writeln();
 
+  for (final idx in realOneofIndices) {
+    final oname = oneofNames[idx]!;
+    final members = oneofFields[idx]!;
+    sb.writeln('  static const Map<int, int> _oneof_$oname = <int, int>{');
+    for (final f in members) {
+      final wt =
+          ctx.isMessageType(f) ? 'ob.WireType.subMsg' : wireTypeConst(f.type);
+      sb.writeln('    ${f.number}: $wt,');
+    }
+    sb.writeln('  };');
+    sb.writeln();
+    sb.writeln('  int get which_$oname {');
+    sb.writeln('    var anyPatch = false;');
+    sb.writeln('    for (final fnum in _oneof_$oname.keys) {');
+    sb.writeln('      if (hasPatch(fnum)) {');
+    sb.writeln('        anyPatch = true;');
+    sb.writeln('        final p = getPatch(fnum);');
+    sb.writeln('        if (p != null && p.isNotEmpty) return fnum;');
+    sb.writeln('      }');
+    sb.writeln('    }');
+    sb.writeln('    if (anyPatch) return 0;');
+    sb.writeln('    return ob.findLastOneofField(rawBytes, _oneof_$oname);');
+    sb.writeln('  }');
+    sb.writeln();
+    sb.writeln('  void clear_$oname() {');
+    for (final f in members) {
+      sb.writeln('    setPatch(${f.number}, null);');
+    }
+    sb.writeln('  }');
+    sb.writeln();
+  }
+
   for (final f in sortedFields) {
     final fname = fieldNames[f.number]!;
+    final oneofName = f.isRealOneof ? oneofNames[f.oneofIndex!] : null;
     if (ctx.isMapField(f)) {
       _emitOpaqueMapAccessors(sb, className, f, fname, ctx);
     } else if (f.label == 3) {
       _emitOpaqueRepeatedAccessors(sb, className, f, fname, ctx);
-    } else if (f.type == PbType.messageType) {
-      _emitOpaqueSubMsgAccessors(sb, f, fname, ctx);
+    } else if (ctx.isMessageType(f)) {
+      _emitOpaqueSubMsgAccessors(sb, f, fname, oneofName, ctx);
     } else {
-      _emitOpaqueScalarAccessors(sb, f, fname);
+      _emitOpaqueScalarAccessors(sb, f, fname, oneofName);
     }
   }
 
@@ -40,9 +76,8 @@ void _emitOpaqueMapAccessors(
 ) {
   final (kf, vf) = ctx.mapEntryFor(f);
   final kt = dartScalarType(kf.type);
-  final vt = vf.type == PbType.messageType
-      ? ctx.typeOf(vf.typeName)
-      : dartScalarType(vf.type);
+  final vt =
+      ctx.isMessageType(vf) ? ctx.typeOf(vf.typeName) : dartScalarType(vf.type);
 
   // Getter
   sb.writeln('  Map<$kt, $vt> get $fname {');
@@ -77,7 +112,7 @@ void _emitOpaqueMapAccessors(
   sb.writeln(
     '        final k = ${readScalarExpr('body', kf.type, inCollection: true)};',
   );
-  if (vf.type == PbType.messageType) {
+  if (ctx.isMessageType(vf)) {
     sb.writeln('        final vLen = body.readCheckedLength();');
     sb.writeln('        final vEnd = body.pos + vLen;');
     sb.writeln('        final vSub = body.subReader(body.pos, vEnd);');
@@ -121,7 +156,7 @@ void _emitOpaqueMapAccessors(
   sb.writeln('      final k = keys[i];');
   sb.writeln('      final v = value[k]!;');
   sb.writeln('      ${writeScalarCall('w', kf.type, 'k')};');
-  if (vf.type == PbType.messageType) {
+  if (ctx.isMessageType(vf)) {
     sb.writeln('      final vSlot = w.reserveLen2();');
     sb.writeln('      v.encodeInto(w, depth: 2);');
     sb.writeln('      w.patchLen2(vSlot);');
@@ -142,9 +177,8 @@ void _emitOpaqueRepeatedAccessors(
   String fname,
   CodegenContext ctx,
 ) {
-  final et = f.type == PbType.messageType
-      ? ctx.typeOf(f.typeName)
-      : dartScalarType(f.type);
+  final et =
+      ctx.isMessageType(f) ? ctx.typeOf(f.typeName) : dartScalarType(f.type);
 
   // Getter
   sb.writeln('  List<$et> get $fname {');
@@ -173,7 +207,7 @@ void _emitOpaqueRepeatedAccessors(
   );
   sb.writeln('      }');
   sb.writeln('      for (var j = 0; j < count; j++) {');
-  if (f.type == PbType.messageType) {
+  if (ctx.isMessageType(f)) {
     sb.writeln('        final iLen = body.readCheckedLength();');
     sb.writeln('        final iEnd = body.pos + iLen;');
     sb.writeln('        final iSub = body.subReader(body.pos, iEnd);');
@@ -211,7 +245,7 @@ void _emitOpaqueRepeatedAccessors(
   sb.writeln('    w.writeByte(${wireTypeConst(f.type)});');
   sb.writeln('    w.writeVarint(value.length);');
   sb.writeln('    for (var i = 0; i < value.length; i++) {');
-  if (f.type == PbType.messageType) {
+  if (ctx.isMessageType(f)) {
     sb.writeln('      final item = value[i];');
     sb.writeln('      final iSlot = w.reserveLen2();');
     sb.writeln('      item.encodeInto(w, depth: 2);');
@@ -230,10 +264,18 @@ void _emitOpaqueSubMsgAccessors(
   StringBuffer sb,
   ProtoFieldDescriptor f,
   String fname,
+  String? oneofName,
   CodegenContext ctx,
 ) {
   final mt = ctx.typeOf(f.typeName);
   final omt = ctx.opaqueTypeOf(f.typeName);
+
+  if (oneofName != null) {
+    sb.writeln('  bool get has_$fname => which_$oneofName == ${f.number};');
+    sb.writeln(
+      '  void clear_$fname() { if (which_$oneofName == ${f.number}) { clear_$oneofName(); } }',
+    );
+  }
 
   // Zero-decode Opaque submessage getter
   sb.writeln('  $omt? get ${fname}Opaque {');
@@ -247,28 +289,52 @@ void _emitOpaqueSubMsgAccessors(
     '      return $omt(Uint8List.sublistView(p, r.pos, r.pos + len));',
   );
   sb.writeln('    }');
-  sb.writeln('    final occs = ob.findAllFields(rawBytes, ${f.number});');
-  sb.writeln('    if (occs.isEmpty) return null;');
-  sb.writeln('    if (occs.length == 1) {');
-  sb.writeln('      final (start, end, wt) = occs[0];');
-  sb.writeln('      if (wt != ob.WireType.subMsg) return null;');
-  sb.writeln('      final r = ob.OmniBufReader(rawBytes, start, end);');
-  sb.writeln('      final len = r.readCheckedLength();');
-  sb.writeln(
-    '      return $omt(Uint8List.sublistView(rawBytes, r.pos, r.pos + len));',
-  );
-  sb.writeln('    }');
-  sb.writeln('    final w = ob.OmniBufWriter(64);');
-  sb.writeln('    var found = false;');
-  sb.writeln('    for (var i = 0; i < occs.length; i++) {');
-  sb.writeln('      final (start, end, wt) = occs[i];');
-  sb.writeln('      if (wt != ob.WireType.subMsg) continue;');
-  sb.writeln('      found = true;');
-  sb.writeln('      final r = ob.OmniBufReader(rawBytes, start, end);');
-  sb.writeln('      final len = r.readCheckedLength();');
-  sb.writeln('      w.writeRawSlice(rawBytes, r.pos, r.pos + len);');
-  sb.writeln('    }');
-  sb.writeln('    return found ? $omt(w.toBytes()) : null;');
+  if (oneofName != null) {
+    sb.writeln('    if (which_$oneofName != ${f.number}) { return null; }');
+    sb.writeln(
+      '    final occs = ob.findActiveOneofSubMsgFields(rawBytes, ${f.number}, _oneof_$oneofName);',
+    );
+    sb.writeln('    if (occs.isEmpty) return null;');
+    sb.writeln('    if (occs.length == 1) {');
+    sb.writeln('      final (start, end) = occs[0];');
+    sb.writeln('      final r = ob.OmniBufReader(rawBytes, start, end);');
+    sb.writeln('      final len = r.readCheckedLength();');
+    sb.writeln(
+      '      return $omt(Uint8List.sublistView(rawBytes, r.pos, r.pos + len));',
+    );
+    sb.writeln('    }');
+    sb.writeln('    final w = ob.OmniBufWriter(64);');
+    sb.writeln('    for (var i = 0; i < occs.length; i++) {');
+    sb.writeln('      final (start, end) = occs[i];');
+    sb.writeln('      final r = ob.OmniBufReader(rawBytes, start, end);');
+    sb.writeln('      final len = r.readCheckedLength();');
+    sb.writeln('      w.writeRawSlice(rawBytes, r.pos, r.pos + len);');
+    sb.writeln('    }');
+    sb.writeln('    return $omt(w.toBytes());');
+  } else {
+    sb.writeln('    final occs = ob.findAllFields(rawBytes, ${f.number});');
+    sb.writeln('    if (occs.isEmpty) return null;');
+    sb.writeln('    if (occs.length == 1) {');
+    sb.writeln('      final (start, end, wt) = occs[0];');
+    sb.writeln('      if (wt != ob.WireType.subMsg) return null;');
+    sb.writeln('      final r = ob.OmniBufReader(rawBytes, start, end);');
+    sb.writeln('      final len = r.readCheckedLength();');
+    sb.writeln(
+      '      return $omt(Uint8List.sublistView(rawBytes, r.pos, r.pos + len));',
+    );
+    sb.writeln('    }');
+    sb.writeln('    final w = ob.OmniBufWriter(64);');
+    sb.writeln('    var found = false;');
+    sb.writeln('    for (var i = 0; i < occs.length; i++) {');
+    sb.writeln('      final (start, end, wt) = occs[i];');
+    sb.writeln('      if (wt != ob.WireType.subMsg) continue;');
+    sb.writeln('      found = true;');
+    sb.writeln('      final r = ob.OmniBufReader(rawBytes, start, end);');
+    sb.writeln('      final len = r.readCheckedLength();');
+    sb.writeln('      w.writeRawSlice(rawBytes, r.pos, r.pos + len);');
+    sb.writeln('    }');
+    sb.writeln('    return found ? $omt(w.toBytes()) : null;');
+  }
   sb.writeln('  }');
   sb.writeln();
 
@@ -283,9 +349,16 @@ void _emitOpaqueSubMsgAccessors(
   // Setter
   sb.writeln('  set $fname($mt? value) {');
   sb.writeln('    if (value == null) {');
-  sb.writeln('      setPatch(${f.number}, null);');
+  if (oneofName != null) {
+    sb.writeln('      clear_$fname();');
+  } else {
+    sb.writeln('      setPatch(${f.number}, null);');
+  }
   sb.writeln('      return;');
   sb.writeln('    }');
+  if (oneofName != null) {
+    sb.writeln('    clear_$oneofName();');
+  }
   sb.writeln('    final est = value.estimateBodyBytes(1);');
   sb.writeln('    final w = ob.OmniBufWriter(est + 8);');
   sb.writeln('    w.writeTag(${f.number}, ob.WireType.subMsg);');
@@ -300,6 +373,9 @@ void _emitOpaqueSubMsgAccessors(
   sb.writeln(
     '  void set${fname[0].toUpperCase()}${fname.substring(1)}Opaque($omt value) {',
   );
+  if (oneofName != null) {
+    sb.writeln('    clear_$oneofName();');
+  }
   sb.writeln('    final body = value.marshalAppend();');
   sb.writeln('    final w = ob.OmniBufWriter(body.length + 8);');
   sb.writeln('    w.writeTag(${f.number}, ob.WireType.subMsg);');
@@ -314,8 +390,24 @@ void _emitOpaqueScalarAccessors(
   StringBuffer sb,
   ProtoFieldDescriptor f,
   String fname,
+  String? oneofName,
 ) {
   final dt = dartScalarType(f.type);
+
+  if (oneofName != null) {
+    sb.writeln('  bool get has_$fname => which_$oneofName == ${f.number};');
+    sb.writeln(
+      '  void clear_$fname() { if (which_$oneofName == ${f.number}) { clear_$oneofName(); } }',
+    );
+  } else if (f.explicitPresence) {
+    final wireCheck = f.type == PbType.boolType
+        ? 'ob.findLastBoolField(rawBytes, ${f.number}) != null'
+        : 'ob.findLastFieldWithWireType(rawBytes, ${f.number}, ${wireTypeConst(f.type)}) != null';
+    sb.writeln(
+      '  bool get has_$fname => hasPatch(${f.number}) ? (getPatch(${f.number})?.isNotEmpty ?? false) : $wireCheck;',
+    );
+    sb.writeln('  void clear_$fname() => setPatch(${f.number}, null);');
+  }
 
   // Getter
   sb.writeln('  $dt get $fname {');
@@ -331,11 +423,16 @@ void _emitOpaqueScalarAccessors(
     sb.writeln('      return wt == ob.WireType.boolTrue;');
   } else {
     sb.writeln(
-      '      if (wt != ${wireTypeConst(f.type)}) return ${defaultScalarExpr(f.type)};',
+      '      if (wt != ${wireTypeConst(f.type)}) { return ${defaultScalarExpr(f.type)}; }',
     );
     sb.writeln('      return ${readScalarExpr('r', f.type)};');
   }
   sb.writeln('    }');
+  if (oneofName != null) {
+    sb.writeln(
+      '    if (which_$oneofName != ${f.number}) { return ${defaultScalarExpr(f.type)}; }',
+    );
+  }
   if (f.type == PbType.boolType) {
     sb.writeln(
       '    final wt = ob.findLastBoolField(rawBytes, ${f.number});',
@@ -357,19 +454,29 @@ void _emitOpaqueScalarAccessors(
 
   // Setter
   sb.writeln('  set $fname($dt value) {');
+  if (oneofName != null) {
+    sb.writeln('    clear_$oneofName();');
+  }
+  final keepZero = oneofName != null || f.explicitPresence;
   if (f.type == PbType.boolType) {
-    sb.writeln('    if (!value) {');
-    sb.writeln('      setPatch(${f.number}, null);');
-    sb.writeln('      return;');
-    sb.writeln('    }');
+    if (!keepZero) {
+      sb.writeln('    if (!value) {');
+      sb.writeln('      setPatch(${f.number}, null);');
+      sb.writeln('      return;');
+      sb.writeln('    }');
+    }
     sb.writeln('    final w = ob.OmniBufWriter(8);');
-    sb.writeln('    w.writeTag(${f.number}, ob.WireType.boolTrue);');
+    sb.writeln(
+      '    w.writeTag(${f.number}, value ? ob.WireType.boolTrue : ob.WireType.boolFalse);',
+    );
     sb.writeln('    setPatch(${f.number}, w.toBytes());');
   } else {
-    sb.writeln('    if (!(${nonZeroCond(f.type, 'value')})) {');
-    sb.writeln('      setPatch(${f.number}, null);');
-    sb.writeln('      return;');
-    sb.writeln('    }');
+    if (!keepZero) {
+      sb.writeln('    if (!(${nonZeroCond(f.type, 'value')})) {');
+      sb.writeln('      setPatch(${f.number}, null);');
+      sb.writeln('      return;');
+      sb.writeln('    }');
+    }
     sb.writeln('    final w = ob.OmniBufWriter(32);');
     sb.writeln('    w.writeTag(${f.number}, ${wireTypeConst(f.type)});');
     sb.writeln('    ${writeScalarCall('w', f.type, 'value')};');

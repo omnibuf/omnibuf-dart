@@ -113,6 +113,7 @@ class Location {
 
   void decodeInto(Uint8List data,
       {ob.DecodeOptions options = ob.DecodeOptions.defaults}) {
+    options.validatedMaxDepth();
     if (data.length > options.maxMessageBytes) {
       throw ob.OmniBufAllocationLimitException(
           'packet size ${data.length} exceeds maxMessageBytes ${options.maxMessageBytes}');
@@ -120,15 +121,17 @@ class Location {
     if (!options.merge) {
       reset();
     }
-    final budget = ob.DecodeBudget(options.maxCollectionElements);
+    final budget = ob.DecodeBudget(options.maxCollectionElements,
+        maxAllocBytes: options.maxAllocBytes);
     final r = ob.OmniBufReader(data);
     decodeBody(r, 0, options, budget);
   }
 
   void decodeBody(ob.OmniBufReader r, int depth, ob.DecodeOptions options,
       [ob.DecodeBudget? budget]) {
-    final activeBudget =
-        budget ?? ob.DecodeBudget(options.maxCollectionElements);
+    final activeBudget = budget ??
+        ob.DecodeBudget(options.maxCollectionElements,
+            maxAllocBytes: options.maxAllocBytes);
     while (r.hasMore) {
       final tag = r.readTag();
       final fnum = tag >> 4;
@@ -146,7 +149,7 @@ class Location {
                 budget: activeBudget);
             break;
           }
-          this.region = r.readString();
+          this.region = r.readString(budget: activeBudget);
         case 2:
           if (wt != ob.WireType.string) {
             ob.skipAndValidateValue(r, wt, depth, options.maxDepth,
@@ -154,7 +157,7 @@ class Location {
                 budget: activeBudget);
             break;
           }
-          this.datacenter = r.readString();
+          this.datacenter = r.readString(budget: activeBudget);
         case 3:
           if (wt != ob.WireType.string) {
             ob.skipAndValidateValue(r, wt, depth, options.maxDepth,
@@ -162,7 +165,7 @@ class Location {
                 budget: activeBudget);
             break;
           }
-          this.city = r.readString();
+          this.city = r.readString(budget: activeBudget);
         case 4:
           if (wt != ob.WireType.uint) {
             ob.skipAndValidateValue(r, wt, depth, options.maxDepth,
@@ -193,6 +196,32 @@ class Location {
       }
     }
   }
+
+  @override
+  bool operator ==(Object other) {
+    if (identical(this, other)) return true;
+    if (other is! Location) return false;
+    return this.region == other.region &&
+        this.datacenter == other.datacenter &&
+        this.city == other.city &&
+        this.rack == other.rack &&
+        this.latitude == other.latitude &&
+        this.longitude == other.longitude;
+  }
+
+  @override
+  int get hashCode => Object.hashAll([
+        this.region,
+        this.datacenter,
+        this.city,
+        this.rack,
+        this.latitude,
+        this.longitude
+      ]);
+
+  @override
+  String toString() =>
+      'Location(region: ${this.region}, datacenter: ${this.datacenter}, city: ${this.city}, rack: ${this.rack}, latitude: ${this.latitude}, longitude: ${this.longitude})';
 }
 
 class OpaqueLocation extends ob.OpaqueMessage {
@@ -205,7 +234,9 @@ class OpaqueLocation extends ob.OpaqueMessage {
       final r = ob.OmniBufReader(p);
       final tag = r.readTag();
       final wt = tag & 0x0F;
-      if (wt != ob.WireType.string) return '';
+      if (wt != ob.WireType.string) {
+        return '';
+      }
       return r.readString();
     }
     final hit = ob.findLastFieldWithWireType(rawBytes, 1, ob.WireType.string);
@@ -233,7 +264,9 @@ class OpaqueLocation extends ob.OpaqueMessage {
       final r = ob.OmniBufReader(p);
       final tag = r.readTag();
       final wt = tag & 0x0F;
-      if (wt != ob.WireType.string) return '';
+      if (wt != ob.WireType.string) {
+        return '';
+      }
       return r.readString();
     }
     final hit = ob.findLastFieldWithWireType(rawBytes, 2, ob.WireType.string);
@@ -261,7 +294,9 @@ class OpaqueLocation extends ob.OpaqueMessage {
       final r = ob.OmniBufReader(p);
       final tag = r.readTag();
       final wt = tag & 0x0F;
-      if (wt != ob.WireType.string) return '';
+      if (wt != ob.WireType.string) {
+        return '';
+      }
       return r.readString();
     }
     final hit = ob.findLastFieldWithWireType(rawBytes, 3, ob.WireType.string);
@@ -289,7 +324,9 @@ class OpaqueLocation extends ob.OpaqueMessage {
       final r = ob.OmniBufReader(p);
       final tag = r.readTag();
       final wt = tag & 0x0F;
-      if (wt != ob.WireType.uint) return 0;
+      if (wt != ob.WireType.uint) {
+        return 0;
+      }
       return r.readUint32();
     }
     final hit = ob.findLastFieldWithWireType(rawBytes, 4, ob.WireType.uint);
@@ -317,7 +354,9 @@ class OpaqueLocation extends ob.OpaqueMessage {
       final r = ob.OmniBufReader(p);
       final tag = r.readTag();
       final wt = tag & 0x0F;
-      if (wt != ob.WireType.float32) return 0.0;
+      if (wt != ob.WireType.float32) {
+        return 0.0;
+      }
       return r.readFloat32();
     }
     final hit = ob.findLastFieldWithWireType(rawBytes, 5, ob.WireType.float32);
@@ -345,7 +384,9 @@ class OpaqueLocation extends ob.OpaqueMessage {
       final r = ob.OmniBufReader(p);
       final tag = r.readTag();
       final wt = tag & 0x0F;
-      if (wt != ob.WireType.float32) return 0.0;
+      if (wt != ob.WireType.float32) {
+        return 0.0;
+      }
       return r.readFloat32();
     }
     final hit = ob.findLastFieldWithWireType(rawBytes, 6, ob.WireType.float32);
@@ -455,6 +496,7 @@ class Neighbor {
 
   void decodeInto(Uint8List data,
       {ob.DecodeOptions options = ob.DecodeOptions.defaults}) {
+    options.validatedMaxDepth();
     if (data.length > options.maxMessageBytes) {
       throw ob.OmniBufAllocationLimitException(
           'packet size ${data.length} exceeds maxMessageBytes ${options.maxMessageBytes}');
@@ -462,15 +504,17 @@ class Neighbor {
     if (!options.merge) {
       reset();
     }
-    final budget = ob.DecodeBudget(options.maxCollectionElements);
+    final budget = ob.DecodeBudget(options.maxCollectionElements,
+        maxAllocBytes: options.maxAllocBytes);
     final r = ob.OmniBufReader(data);
     decodeBody(r, 0, options, budget);
   }
 
   void decodeBody(ob.OmniBufReader r, int depth, ob.DecodeOptions options,
       [ob.DecodeBudget? budget]) {
-    final activeBudget =
-        budget ?? ob.DecodeBudget(options.maxCollectionElements);
+    final activeBudget = budget ??
+        ob.DecodeBudget(options.maxCollectionElements,
+            maxAllocBytes: options.maxAllocBytes);
     while (r.hasMore) {
       final tag = r.readTag();
       final fnum = tag >> 4;
@@ -496,7 +540,7 @@ class Neighbor {
                 budget: activeBudget);
             break;
           }
-          this.router = r.readString();
+          this.router = r.readString(budget: activeBudget);
         case 3:
           if (wt != ob.WireType.uint) {
             ob.skipAndValidateValue(r, wt, depth, options.maxDepth,
@@ -519,6 +563,24 @@ class Neighbor {
       }
     }
   }
+
+  @override
+  bool operator ==(Object other) {
+    if (identical(this, other)) return true;
+    if (other is! Neighbor) return false;
+    return this.peerAsn == other.peerAsn &&
+        this.router == other.router &&
+        this.latencyUs == other.latencyUs &&
+        this.established == other.established;
+  }
+
+  @override
+  int get hashCode => Object.hashAll(
+      [this.peerAsn, this.router, this.latencyUs, this.established]);
+
+  @override
+  String toString() =>
+      'Neighbor(peerAsn: ${this.peerAsn}, router: ${this.router}, latencyUs: ${this.latencyUs}, established: ${this.established})';
 }
 
 class OpaqueNeighbor extends ob.OpaqueMessage {
@@ -531,7 +593,9 @@ class OpaqueNeighbor extends ob.OpaqueMessage {
       final r = ob.OmniBufReader(p);
       final tag = r.readTag();
       final wt = tag & 0x0F;
-      if (wt != ob.WireType.uint) return 0;
+      if (wt != ob.WireType.uint) {
+        return 0;
+      }
       return r.readUint32();
     }
     final hit = ob.findLastFieldWithWireType(rawBytes, 1, ob.WireType.uint);
@@ -559,7 +623,9 @@ class OpaqueNeighbor extends ob.OpaqueMessage {
       final r = ob.OmniBufReader(p);
       final tag = r.readTag();
       final wt = tag & 0x0F;
-      if (wt != ob.WireType.string) return '';
+      if (wt != ob.WireType.string) {
+        return '';
+      }
       return r.readString();
     }
     final hit = ob.findLastFieldWithWireType(rawBytes, 2, ob.WireType.string);
@@ -587,7 +653,9 @@ class OpaqueNeighbor extends ob.OpaqueMessage {
       final r = ob.OmniBufReader(p);
       final tag = r.readTag();
       final wt = tag & 0x0F;
-      if (wt != ob.WireType.uint) return 0;
+      if (wt != ob.WireType.uint) {
+        return 0;
+      }
       return r.readUint32();
     }
     final hit = ob.findLastFieldWithWireType(rawBytes, 3, ob.WireType.uint);
@@ -627,7 +695,7 @@ class OpaqueNeighbor extends ob.OpaqueMessage {
       return;
     }
     final w = ob.OmniBufWriter(8);
-    w.writeTag(4, ob.WireType.boolTrue);
+    w.writeTag(4, value ? ob.WireType.boolTrue : ob.WireType.boolFalse);
     setPatch(4, w.toBytes());
   }
 }
@@ -685,7 +753,9 @@ class PeerUpdate {
     for (var i = 0; i < this.tags.length; i++) {
       n += this.tags[i].length + 4;
     }
-    if (this.location != null) n += this.location!.estimateBodyBytes(depth + 1);
+    if (this.location != null) {
+      n += this.location!.estimateBodyBytes(depth + 1);
+    }
     for (var i = 0; i < this.neighbors.length; i++) {
       n += this.neighbors[i].estimateBodyBytes(depth + 2);
     }
@@ -782,26 +852,22 @@ class PeerUpdate {
     if (this.location != null) {
       final sub = this.location!;
       w.writeTag(9, ob.WireType.subMsg);
-      final slot = w.reserveLenAuto(sub.estimateBodyBytes(depth + 1));
+      final slot = w.reserveLen2();
       sub.encodeInto(w, options: options, depth: depth + 1);
-      w.patchLenAuto(slot);
+      w.patchLen2(slot);
     }
     if (this.neighbors.isNotEmpty) {
       w.writeTag(10, ob.WireType.array);
-      var est = 8;
-      for (var i = 0; i < this.neighbors.length; i++) {
-        est += this.neighbors[i].estimateBodyBytes(depth + 2);
-      }
-      final slot = w.reserveLenAuto(est);
+      final slot = w.reserveLen2();
       w.writeByte(ob.WireType.subMsg);
       w.writeVarint(this.neighbors.length);
       for (var i = 0; i < this.neighbors.length; i++) {
         final item = this.neighbors[i];
-        final iSlot = w.reserveLenAuto(item.estimateBodyBytes(depth + 2));
+        final iSlot = w.reserveLen2();
         item.encodeInto(w, options: options, depth: depth + 2);
-        w.patchLenAuto(iSlot);
+        w.patchLen2(iSlot);
       }
-      w.patchLenAuto(slot);
+      w.patchLen2(slot);
     }
     if (this.sequence != 0) {
       w.writeTag(11, ob.WireType.uint);
@@ -818,6 +884,7 @@ class PeerUpdate {
 
   void decodeInto(Uint8List data,
       {ob.DecodeOptions options = ob.DecodeOptions.defaults}) {
+    options.validatedMaxDepth();
     if (data.length > options.maxMessageBytes) {
       throw ob.OmniBufAllocationLimitException(
           'packet size ${data.length} exceeds maxMessageBytes ${options.maxMessageBytes}');
@@ -825,15 +892,17 @@ class PeerUpdate {
     if (!options.merge) {
       reset();
     }
-    final budget = ob.DecodeBudget(options.maxCollectionElements);
+    final budget = ob.DecodeBudget(options.maxCollectionElements,
+        maxAllocBytes: options.maxAllocBytes);
     final r = ob.OmniBufReader(data);
     decodeBody(r, 0, options, budget);
   }
 
   void decodeBody(ob.OmniBufReader r, int depth, ob.DecodeOptions options,
       [ob.DecodeBudget? budget]) {
-    final activeBudget =
-        budget ?? ob.DecodeBudget(options.maxCollectionElements);
+    final activeBudget = budget ??
+        ob.DecodeBudget(options.maxCollectionElements,
+            maxAllocBytes: options.maxAllocBytes);
     while (r.hasMore) {
       final tag = r.readTag();
       final fnum = tag >> 4;
@@ -859,7 +928,7 @@ class PeerUpdate {
                 budget: activeBudget);
             break;
           }
-          this.routerId = r.readString();
+          this.routerId = r.readString(budget: activeBudget);
         case 3:
           if (wt != ob.WireType.boolFalse && wt != ob.WireType.boolTrue) {
             ob.skipAndValidateValue(r, wt, depth, options.maxDepth,
@@ -914,7 +983,7 @@ class PeerUpdate {
                 'tags WireArray ElementType mismatch: $elemWt');
           }
           for (var i = 0; i < count; i++) {
-            this.tags.add(body.readString());
+            this.tags.add(body.readString(budget: activeBudget));
           }
           if (body.pos != bodyEnd) {
             throw const ob.OmniBufParseException('WireArray trailing bytes');
@@ -1017,6 +1086,42 @@ class PeerUpdate {
       }
     }
   }
+
+  @override
+  bool operator ==(Object other) {
+    if (identical(this, other)) return true;
+    if (other is! PeerUpdate) return false;
+    return this.asn == other.asn &&
+        this.routerId == other.routerId &&
+        this.active == other.active &&
+        this.uptimeSec == other.uptimeSec &&
+        this.rssiDbm == other.rssiDbm &&
+        this.cpuLoad == other.cpuLoad &&
+        ob.listEquals(this.tags, other.tags) &&
+        ob.listEquals(this.prefixes, other.prefixes) &&
+        this.location == other.location &&
+        ob.listEquals(this.neighbors, other.neighbors) &&
+        this.sequence == other.sequence;
+  }
+
+  @override
+  int get hashCode => Object.hashAll([
+        this.asn,
+        this.routerId,
+        this.active,
+        this.uptimeSec,
+        this.rssiDbm,
+        this.cpuLoad,
+        ob.listHash(this.tags),
+        ob.listHash(this.prefixes),
+        this.location,
+        ob.listHash(this.neighbors),
+        this.sequence
+      ]);
+
+  @override
+  String toString() =>
+      'PeerUpdate(asn: ${this.asn}, routerId: ${this.routerId}, active: ${this.active}, uptimeSec: ${this.uptimeSec}, rssiDbm: ${this.rssiDbm}, cpuLoad: ${this.cpuLoad}, tags: ${this.tags}, prefixes: ${this.prefixes}, location: ${this.location}, neighbors: ${this.neighbors}, sequence: ${this.sequence})';
 }
 
 class OpaquePeerUpdate extends ob.OpaqueMessage {
@@ -1029,7 +1134,9 @@ class OpaquePeerUpdate extends ob.OpaqueMessage {
       final r = ob.OmniBufReader(p);
       final tag = r.readTag();
       final wt = tag & 0x0F;
-      if (wt != ob.WireType.uint) return 0;
+      if (wt != ob.WireType.uint) {
+        return 0;
+      }
       return r.readUint32();
     }
     final hit = ob.findLastFieldWithWireType(rawBytes, 1, ob.WireType.uint);
@@ -1057,7 +1164,9 @@ class OpaquePeerUpdate extends ob.OpaqueMessage {
       final r = ob.OmniBufReader(p);
       final tag = r.readTag();
       final wt = tag & 0x0F;
-      if (wt != ob.WireType.string) return '';
+      if (wt != ob.WireType.string) {
+        return '';
+      }
       return r.readString();
     }
     final hit = ob.findLastFieldWithWireType(rawBytes, 2, ob.WireType.string);
@@ -1097,7 +1206,7 @@ class OpaquePeerUpdate extends ob.OpaqueMessage {
       return;
     }
     final w = ob.OmniBufWriter(8);
-    w.writeTag(3, ob.WireType.boolTrue);
+    w.writeTag(3, value ? ob.WireType.boolTrue : ob.WireType.boolFalse);
     setPatch(3, w.toBytes());
   }
 
@@ -1108,7 +1217,9 @@ class OpaquePeerUpdate extends ob.OpaqueMessage {
       final r = ob.OmniBufReader(p);
       final tag = r.readTag();
       final wt = tag & 0x0F;
-      if (wt != ob.WireType.uint) return 0;
+      if (wt != ob.WireType.uint) {
+        return 0;
+      }
       return r.readVarint();
     }
     final hit = ob.findLastFieldWithWireType(rawBytes, 4, ob.WireType.uint);
@@ -1136,7 +1247,9 @@ class OpaquePeerUpdate extends ob.OpaqueMessage {
       final r = ob.OmniBufReader(p);
       final tag = r.readTag();
       final wt = tag & 0x0F;
-      if (wt != ob.WireType.sint) return 0;
+      if (wt != ob.WireType.sint) {
+        return 0;
+      }
       return r.readSint32();
     }
     final hit = ob.findLastFieldWithWireType(rawBytes, 5, ob.WireType.sint);
@@ -1164,7 +1277,9 @@ class OpaquePeerUpdate extends ob.OpaqueMessage {
       final r = ob.OmniBufReader(p);
       final tag = r.readTag();
       final wt = tag & 0x0F;
-      if (wt != ob.WireType.float64) return 0.0;
+      if (wt != ob.WireType.float64) {
+        return 0.0;
+      }
       return r.readFloat64();
     }
     final hit = ob.findLastFieldWithWireType(rawBytes, 6, ob.WireType.float64);
@@ -1397,9 +1512,9 @@ class OpaquePeerUpdate extends ob.OpaqueMessage {
     w.writeVarint(value.length);
     for (var i = 0; i < value.length; i++) {
       final item = value[i];
-      final iSlot = w.reserveLenAuto(item.estimateBodyBytes(2));
+      final iSlot = w.reserveLen2();
       item.encodeInto(w, depth: 2);
-      w.patchLenAuto(iSlot);
+      w.patchLen2(iSlot);
     }
     w.patchLen2(slot);
     setPatch(10, w.toBytes());
@@ -1412,7 +1527,9 @@ class OpaquePeerUpdate extends ob.OpaqueMessage {
       final r = ob.OmniBufReader(p);
       final tag = r.readTag();
       final wt = tag & 0x0F;
-      if (wt != ob.WireType.uint) return 0;
+      if (wt != ob.WireType.uint) {
+        return 0;
+      }
       return r.readVarint();
     }
     final hit = ob.findLastFieldWithWireType(rawBytes, 11, ob.WireType.uint);

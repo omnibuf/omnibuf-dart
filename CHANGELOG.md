@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.1.3
+
+- Added Protobuf Editions 2023, 2024, and 2026 support across `protoc-gen-omnibuf-dart` and `ProtobufOmniBufCodec`, including `EXPLICIT`/`IMPLICIT` presence, 3-level feature inheritance, `DELIMITED` submessages, `PACKED`/`EXPANDED` repeated arrays, open enums, and `export`/`local` symbol visibility.
+- Preserved unknown singular open enum integer values through `ProtobufOmniBufCodec` via unknown field storage.
+- Verified 1109/1109 cross-language conformance tests across all 4 tiers.
+
 ## 0.1.2
 
 - Added detached `package:omnibuf/grpc.dart` codec helpers (`ClientMethod` and `ServiceMethod` marshallers for `package:grpc`) with zero runtime gRPC dependency on core `package:omnibuf/omnibuf.dart`.

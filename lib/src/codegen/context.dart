@@ -7,17 +7,21 @@ class CodegenContext {
   final Map<String, ProtoMessageDescriptor> mapEntries;
   final Map<String, TypeRef> typeRegistry;
   final Map<String, String> depAliases;
+  final Set<String> usedDeps = <String>{};
 
-  const CodegenContext({
+  CodegenContext({
     required this.currentFile,
     required this.mapEntries,
     required this.typeRegistry,
     required this.depAliases,
   });
 
+  bool isMessageType(ProtoFieldDescriptor f) =>
+      f.type == PbType.messageType || f.isDelimitedMessage;
+
   bool isMapField(ProtoFieldDescriptor f) =>
       f.label == 3 &&
-      f.type == PbType.messageType &&
+      isMessageType(f) &&
       mapEntries.containsKey(normalizeFqn(f.typeName));
 
   (ProtoFieldDescriptor keyField, ProtoFieldDescriptor valField) mapEntryFor(
@@ -29,9 +33,19 @@ class CodegenContext {
     return (kf, vf);
   }
 
-  String typeOf(String fqn) =>
-      resolveTypeName(fqn, currentFile, typeRegistry, depAliases);
+  String typeOf(String fqn) {
+    final ref = typeRegistry[normalizeFqn(fqn)];
+    if (ref != null && ref.fileName != currentFile) {
+      usedDeps.add(ref.fileName);
+    }
+    return resolveTypeName(fqn, currentFile, typeRegistry, depAliases);
+  }
 
-  String opaqueTypeOf(String fqn) =>
-      resolveOpaqueTypeName(fqn, currentFile, typeRegistry, depAliases);
+  String opaqueTypeOf(String fqn) {
+    final ref = typeRegistry[normalizeFqn(fqn)];
+    if (ref != null && ref.fileName != currentFile) {
+      usedDeps.add(ref.fileName);
+    }
+    return resolveOpaqueTypeName(fqn, currentFile, typeRegistry, depAliases);
+  }
 }

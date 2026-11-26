@@ -7,6 +7,12 @@ import 'package:omnibuf/src/generated/omnibuf/bench/peer.omnibuf.dart'
     as gen_peer;
 import 'package:omnibuf/src/generated/omnibuf/conformance/conformance.omnibuf.dart'
     as gen_conf;
+import 'package:omnibuf/src/generated/omnibuf/conformance/editions_2023.omnibuf.dart'
+    as gen_e23;
+import 'package:omnibuf/src/generated/omnibuf/conformance/editions_2024.omnibuf.dart'
+    as gen_e24;
+import 'package:omnibuf/src/generated/omnibuf/conformance/editions_2026.omnibuf.dart'
+    as gen_e26;
 import 'package:protobuf/protobuf.dart';
 
 const int _maxFrameBytes = 16 * 1024 * 1024;
@@ -153,6 +159,169 @@ class PbTestAllTypes extends GeneratedMessage {
   PbTestAllTypes createEmptyInstance() => create();
   @override
   PbTestAllTypes clone() => PbTestAllTypes()..mergeFromMessage(this);
+  @override
+  BuilderInfo get info_ => _i;
+}
+
+class PbEditionsStatus extends ProtobufEnum {
+  static const PbEditionsStatus unspecified =
+      PbEditionsStatus._(0, 'UNSPECIFIED');
+  static const PbEditionsStatus active = PbEditionsStatus._(1, 'ACTIVE');
+  static const PbEditionsStatus paused = PbEditionsStatus._(2, 'PAUSED');
+  static const List<PbEditionsStatus> values = <PbEditionsStatus>[
+    PbEditionsStatus.unspecified,
+    PbEditionsStatus.active,
+    PbEditionsStatus.paused,
+  ];
+  static final Map<int, PbEditionsStatus> _byValue =
+      ProtobufEnum.initByValue(values);
+  static PbEditionsStatus? valueOf(int value) => _byValue[value];
+  const PbEditionsStatus._(super.v, super.n);
+}
+
+BuilderInfo _buildPbEditionsChildInfo(
+  String messageName,
+  CreateBuilderFunc create,
+) =>
+    BuilderInfo(
+      messageName,
+      package: const PackageName('omnibuf.conformance'),
+      createEmptyInstance: create,
+    )
+      ..a<int>(1, 'id', PbFieldType.O3)
+      ..aOS(2, 'note')
+      ..hasRequiredFields = false;
+
+BuilderInfo _buildPbEditionsInfo(
+  String messageName,
+  CreateBuilderFunc create,
+  CreateBuilderFunc createChild,
+) =>
+    BuilderInfo(
+      messageName,
+      package: const PackageName('omnibuf.conformance'),
+      createEmptyInstance: create,
+    )
+      ..oo(0, <int>[14, 15, 16, 17])
+      ..a<int>(1, 'explicit_int', PbFieldType.O3)
+      ..aOB(2, 'explicit_bool')
+      ..aOS(3, 'explicit_string')
+      ..a<List<int>>(4, 'explicit_bytes', PbFieldType.OY)
+      ..a<double>(5, 'explicit_double', PbFieldType.OD)
+      ..e<PbEditionsStatus>(
+        6,
+        'status',
+        PbFieldType.OE,
+        defaultOrMaker: PbEditionsStatus.unspecified,
+        valueOf: PbEditionsStatus.valueOf,
+        enumValues: PbEditionsStatus.values,
+      )
+      ..a<int>(7, 'implicit_count', PbFieldType.O3)
+      ..aOB(8, 'implicit_flag')
+      ..aOM<GeneratedMessage>(9, 'child', subBuilder: createChild)
+      ..a<GeneratedMessage>(
+        10,
+        'delimited_child',
+        PbFieldType.OG,
+        subBuilder: createChild,
+      )
+      ..p<int>(11, 'packed_vals', PbFieldType.K3)
+      ..p<int>(12, 'expanded_vals', PbFieldType.P3)
+      ..m<String, int>(
+        13,
+        'scores',
+        keyFieldType: PbFieldType.OS,
+        valueFieldType: PbFieldType.O3,
+      )
+      ..a<int>(14, 'choice_int', PbFieldType.O3)
+      ..aOS(15, 'choice_text')
+      ..aOB(16, 'choice_flag')
+      ..aOM<GeneratedMessage>(17, 'choice_child', subBuilder: createChild)
+      ..hasRequiredFields = false;
+
+class PbEditions2023Child extends GeneratedMessage {
+  static final BuilderInfo _i =
+      _buildPbEditionsChildInfo('Editions2023Child', create);
+  PbEditions2023Child() : super();
+  static PbEditions2023Child create() => PbEditions2023Child();
+  @override
+  PbEditions2023Child createEmptyInstance() => create();
+  @override
+  PbEditions2023Child clone() => PbEditions2023Child()..mergeFromMessage(this);
+  @override
+  BuilderInfo get info_ => _i;
+}
+
+class PbTestEditions2023 extends GeneratedMessage {
+  static final BuilderInfo _i = _buildPbEditionsInfo(
+    'TestEditions2023',
+    create,
+    PbEditions2023Child.create,
+  );
+  PbTestEditions2023() : super();
+  static PbTestEditions2023 create() => PbTestEditions2023();
+  @override
+  PbTestEditions2023 createEmptyInstance() => create();
+  @override
+  PbTestEditions2023 clone() => PbTestEditions2023()..mergeFromMessage(this);
+  @override
+  BuilderInfo get info_ => _i;
+}
+
+class PbEditions2024Child extends GeneratedMessage {
+  static final BuilderInfo _i =
+      _buildPbEditionsChildInfo('Editions2024Child', create);
+  PbEditions2024Child() : super();
+  static PbEditions2024Child create() => PbEditions2024Child();
+  @override
+  PbEditions2024Child createEmptyInstance() => create();
+  @override
+  PbEditions2024Child clone() => PbEditions2024Child()..mergeFromMessage(this);
+  @override
+  BuilderInfo get info_ => _i;
+}
+
+class PbTestEditions2024 extends GeneratedMessage {
+  static final BuilderInfo _i = _buildPbEditionsInfo(
+    'TestEditions2024',
+    create,
+    PbEditions2024Child.create,
+  );
+  PbTestEditions2024() : super();
+  static PbTestEditions2024 create() => PbTestEditions2024();
+  @override
+  PbTestEditions2024 createEmptyInstance() => create();
+  @override
+  PbTestEditions2024 clone() => PbTestEditions2024()..mergeFromMessage(this);
+  @override
+  BuilderInfo get info_ => _i;
+}
+
+class PbEditions2026Child extends GeneratedMessage {
+  static final BuilderInfo _i =
+      _buildPbEditionsChildInfo('Editions2026Child', create);
+  PbEditions2026Child() : super();
+  static PbEditions2026Child create() => PbEditions2026Child();
+  @override
+  PbEditions2026Child createEmptyInstance() => create();
+  @override
+  PbEditions2026Child clone() => PbEditions2026Child()..mergeFromMessage(this);
+  @override
+  BuilderInfo get info_ => _i;
+}
+
+class PbTestEditions2026 extends GeneratedMessage {
+  static final BuilderInfo _i = _buildPbEditionsInfo(
+    'TestEditions2026',
+    create,
+    PbEditions2026Child.create,
+  );
+  PbTestEditions2026() : super();
+  static PbTestEditions2026 create() => PbTestEditions2026();
+  @override
+  PbTestEditions2026 createEmptyInstance() => create();
+  @override
+  PbTestEditions2026 clone() => PbTestEditions2026()..mergeFromMessage(this);
   @override
   BuilderInfo get info_ => _i;
 }
@@ -1087,6 +1256,27 @@ gen_conf.ConformanceResponse _handleProtobufTypes(
         return gen_conf.ConformanceResponse(
           omnibufPayload: ProtobufOmniBufCodec.encode(dirty, options: encOpts),
         );
+      case 'omnibuf.conformance.TestEditions2023':
+        return _handleProtobufEditions(
+          PbTestEditions2023(),
+          PbEditions2023Child(),
+          req.omnibufPayload,
+          encOpts,
+        );
+      case 'omnibuf.conformance.TestEditions2024':
+        return _handleProtobufEditions(
+          PbTestEditions2024(),
+          PbEditions2024Child(),
+          req.omnibufPayload,
+          encOpts,
+        );
+      case 'omnibuf.conformance.TestEditions2026':
+        return _handleProtobufEditions(
+          PbTestEditions2026(),
+          PbEditions2026Child(),
+          req.omnibufPayload,
+          encOpts,
+        );
       default:
         final dirty = PbTestAllTypes()
           ..setField(1, 123)
@@ -1105,6 +1295,37 @@ gen_conf.ConformanceResponse _handleProtobufTypes(
   } catch (e) {
     return gen_conf.ConformanceResponse(runtimeError: e.toString());
   }
+}
+
+gen_conf.ConformanceResponse _handleProtobufEditions(
+  GeneratedMessage dirty,
+  GeneratedMessage staleChild,
+  Uint8List payload,
+  EncodeOptions encOpts,
+) {
+  staleChild
+    ..setField(1, 999)
+    ..setField(2, 'stale-child');
+  dirty
+    ..setField(1, 777)
+    ..setField(2, true)
+    ..setField(3, 'stale')
+    ..setField(4, Uint8List.fromList(<int>[0xAA, 0xBB]))
+    ..setField(5, 9.5)
+    ..setField(6, PbEditionsStatus.paused)
+    ..setField(7, 55)
+    ..setField(8, true)
+    ..setField(9, staleChild)
+    ..setField(15, 'stale-choice');
+  (dirty.getField(11) as List<int>).add(111);
+  (dirty.getField(12) as List<int>).add(222);
+  (dirty.getField(13) as Map<String, int>)['stale'] = 1;
+  dirty.unknownFields.mergeVarintField(6, Int64(1234));
+
+  ProtobufOmniBufCodec.decodeInto(payload, dirty);
+  return gen_conf.ConformanceResponse(
+    omnibufPayload: ProtobufOmniBufCodec.encode(dirty, options: encOpts),
+  );
 }
 
 // ============================================================================
@@ -1196,6 +1417,75 @@ gen_conf.ConformanceResponse _handlePlugin(gen_conf.ConformanceRequest req) {
         return gen_conf.ConformanceResponse(omnibufPayload: out);
       }
 
+      _assertUnmutated(raw, rawSnapshot);
+      return gen_conf.ConformanceResponse(
+        omnibufPayload: dirty.encode(options: encOpts),
+      );
+    } else if (req.messageType == 'omnibuf.conformance.TestEditions2023') {
+      final dirty = gen_e23.TestEditions2023(
+        explicitInt: 777,
+        explicitBool: true,
+        explicitString: 'stale',
+        explicitBytes: Uint8List.fromList(<int>[0xAA, 0xBB]),
+        explicitDouble: 9.5,
+        status: gen_e23.Editions2023Status.EDITIONS2023_STATUS_PAUSED,
+        implicitCount: 55,
+        implicitFlag: true,
+        child: gen_e23.Editions2023Child(id: 1, note: 'stale'),
+        delimitedChild: gen_e23.Editions2023Child(id: 2, note: 'stale-del'),
+        packedVals: <int>[111],
+        expandedVals: <int>[222],
+        scores: <String, int>{'stale': 1},
+        choiceText: 'stale-choice',
+      );
+      dirty.decodeInto(raw);
+      _verifyEditions2023Opaque(dirty, gen_e23.OpaqueTestEditions2023(raw));
+      _assertUnmutated(raw, rawSnapshot);
+      return gen_conf.ConformanceResponse(
+        omnibufPayload: dirty.encode(options: encOpts),
+      );
+    } else if (req.messageType == 'omnibuf.conformance.TestEditions2024') {
+      final dirty = gen_e24.TestEditions2024(
+        explicitInt: 777,
+        explicitBool: true,
+        explicitString: 'stale',
+        explicitBytes: Uint8List.fromList(<int>[0xAA, 0xBB]),
+        explicitDouble: 9.5,
+        status: gen_e24.Editions2024Status.EDITIONS2024_STATUS_PAUSED,
+        implicitCount: 55,
+        implicitFlag: true,
+        child: gen_e24.Editions2024Child(id: 1, note: 'stale'),
+        delimitedChild: gen_e24.Editions2024Child(id: 2, note: 'stale-del'),
+        packedVals: <int>[111],
+        expandedVals: <int>[222],
+        scores: <String, int>{'stale': 1},
+        choiceText: 'stale-choice',
+      );
+      dirty.decodeInto(raw);
+      _verifyEditions2024Opaque(dirty, gen_e24.OpaqueTestEditions2024(raw));
+      _assertUnmutated(raw, rawSnapshot);
+      return gen_conf.ConformanceResponse(
+        omnibufPayload: dirty.encode(options: encOpts),
+      );
+    } else if (req.messageType == 'omnibuf.conformance.TestEditions2026') {
+      final dirty = gen_e26.TestEditions2026(
+        explicitInt: 777,
+        explicitBool: true,
+        explicitString: 'stale',
+        explicitBytes: Uint8List.fromList(<int>[0xAA, 0xBB]),
+        explicitDouble: 9.5,
+        status: gen_e26.Editions2026Status.EDITIONS2026_STATUS_PAUSED,
+        implicitCount: 55,
+        implicitFlag: true,
+        child: gen_e26.Editions2026Child(id: 1, note: 'stale'),
+        delimitedChild: gen_e26.Editions2026Child(id: 2, note: 'stale-del'),
+        packedVals: <int>[111],
+        expandedVals: <int>[222],
+        scores: <String, int>{'stale': 1},
+        choiceText: 'stale-choice',
+      );
+      dirty.decodeInto(raw);
+      _verifyEditions2026Opaque(dirty, gen_e26.OpaqueTestEditions2026(raw));
       _assertUnmutated(raw, rawSnapshot);
       return gen_conf.ConformanceResponse(
         omnibufPayload: dirty.encode(options: encOpts),
@@ -1441,5 +1731,113 @@ void _verifyTestAllTypesOpaque(
     if (opMap[e.key] != e.value) {
       throw StateError('OpaqueTestAllTypes f12MapStrUint[${e.key}] mismatch');
     }
+  }
+}
+
+void _verifyEditions2023Opaque(
+  gen_e23.TestEditions2023 eager,
+  gen_e23.OpaqueTestEditions2023 op,
+) {
+  if (op.has_explicitInt != eager.has_explicitInt ||
+      op.explicitInt != eager.explicitInt ||
+      op.has_explicitBool != eager.has_explicitBool ||
+      op.explicitBool != eager.explicitBool ||
+      op.has_explicitString != eager.has_explicitString ||
+      op.explicitString != eager.explicitString ||
+      op.has_explicitBytes != eager.has_explicitBytes ||
+      !bytesEquals(op.explicitBytes, eager.explicitBytes) ||
+      op.has_explicitDouble != eager.has_explicitDouble ||
+      !_doubleBitsEqual(op.explicitDouble, eager.explicitDouble) ||
+      op.has_status != eager.has_status ||
+      op.status != eager.status ||
+      op.implicitCount != eager.implicitCount ||
+      op.implicitFlag != eager.implicitFlag ||
+      !listEquals(op.packedVals, eager.packedVals) ||
+      !listEquals(op.expandedVals, eager.expandedVals) ||
+      !mapEquals(op.scores, eager.scores) ||
+      op.which_choice != eager.which_choice ||
+      op.has_choiceInt != eager.has_choiceInt ||
+      op.choiceInt != eager.choiceInt ||
+      op.has_choiceText != eager.has_choiceText ||
+      op.choiceText != eager.choiceText ||
+      op.has_choiceFlag != eager.has_choiceFlag ||
+      op.choiceFlag != eager.choiceFlag ||
+      op.has_choiceChild != eager.has_choiceChild ||
+      op.choiceChild != eager.choiceChild ||
+      op.child != eager.child ||
+      op.delimitedChild != eager.delimitedChild) {
+    throw StateError('OpaqueTestEditions2023 parity mismatch');
+  }
+}
+
+void _verifyEditions2024Opaque(
+  gen_e24.TestEditions2024 eager,
+  gen_e24.OpaqueTestEditions2024 op,
+) {
+  if (op.has_explicitInt != eager.has_explicitInt ||
+      op.explicitInt != eager.explicitInt ||
+      op.has_explicitBool != eager.has_explicitBool ||
+      op.explicitBool != eager.explicitBool ||
+      op.has_explicitString != eager.has_explicitString ||
+      op.explicitString != eager.explicitString ||
+      op.has_explicitBytes != eager.has_explicitBytes ||
+      !bytesEquals(op.explicitBytes, eager.explicitBytes) ||
+      op.has_explicitDouble != eager.has_explicitDouble ||
+      !_doubleBitsEqual(op.explicitDouble, eager.explicitDouble) ||
+      op.has_status != eager.has_status ||
+      op.status != eager.status ||
+      op.implicitCount != eager.implicitCount ||
+      op.implicitFlag != eager.implicitFlag ||
+      !listEquals(op.packedVals, eager.packedVals) ||
+      !listEquals(op.expandedVals, eager.expandedVals) ||
+      !mapEquals(op.scores, eager.scores) ||
+      op.which_choice != eager.which_choice ||
+      op.has_choiceInt != eager.has_choiceInt ||
+      op.choiceInt != eager.choiceInt ||
+      op.has_choiceText != eager.has_choiceText ||
+      op.choiceText != eager.choiceText ||
+      op.has_choiceFlag != eager.has_choiceFlag ||
+      op.choiceFlag != eager.choiceFlag ||
+      op.has_choiceChild != eager.has_choiceChild ||
+      op.choiceChild != eager.choiceChild ||
+      op.child != eager.child ||
+      op.delimitedChild != eager.delimitedChild) {
+    throw StateError('OpaqueTestEditions2024 parity mismatch');
+  }
+}
+
+void _verifyEditions2026Opaque(
+  gen_e26.TestEditions2026 eager,
+  gen_e26.OpaqueTestEditions2026 op,
+) {
+  if (op.has_explicitInt != eager.has_explicitInt ||
+      op.explicitInt != eager.explicitInt ||
+      op.has_explicitBool != eager.has_explicitBool ||
+      op.explicitBool != eager.explicitBool ||
+      op.has_explicitString != eager.has_explicitString ||
+      op.explicitString != eager.explicitString ||
+      op.has_explicitBytes != eager.has_explicitBytes ||
+      !bytesEquals(op.explicitBytes, eager.explicitBytes) ||
+      op.has_explicitDouble != eager.has_explicitDouble ||
+      !_doubleBitsEqual(op.explicitDouble, eager.explicitDouble) ||
+      op.has_status != eager.has_status ||
+      op.status != eager.status ||
+      op.implicitCount != eager.implicitCount ||
+      op.implicitFlag != eager.implicitFlag ||
+      !listEquals(op.packedVals, eager.packedVals) ||
+      !listEquals(op.expandedVals, eager.expandedVals) ||
+      !mapEquals(op.scores, eager.scores) ||
+      op.which_choice != eager.which_choice ||
+      op.has_choiceInt != eager.has_choiceInt ||
+      op.choiceInt != eager.choiceInt ||
+      op.has_choiceText != eager.has_choiceText ||
+      op.choiceText != eager.choiceText ||
+      op.has_choiceFlag != eager.has_choiceFlag ||
+      op.choiceFlag != eager.choiceFlag ||
+      op.has_choiceChild != eager.has_choiceChild ||
+      op.choiceChild != eager.choiceChild ||
+      op.child != eager.child ||
+      op.delimitedChild != eager.delimitedChild) {
+    throw StateError('OpaqueTestEditions2026 parity mismatch');
   }
 }

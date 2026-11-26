@@ -11,6 +11,7 @@ abstract final class PbType {
   static const int fixed32Type = 7;
   static const int boolType = 8;
   static const int stringType = 9;
+  static const int groupType = 10;
   static const int messageType = 11;
   static const int bytesType = 12;
   static const int uint32Type = 13;
@@ -239,6 +240,27 @@ Map<int, String> assignFieldNames(List<ProtoFieldDescriptor> sortedFields) {
   return names;
 }
 
+Map<int, String> assignOneofNames(
+  List<int> realOneofIndices,
+  List<ProtoOneofDescriptor> oneofs,
+  Set<String> usedFieldNames,
+) {
+  final used = Set<String>.of(usedFieldNames);
+  final names = <int, String>{};
+  for (final idx in realOneofIndices) {
+    final raw = (idx >= 0 && idx < oneofs.length && oneofs[idx].name.isNotEmpty)
+        ? oneofs[idx].name
+        : 'oneof_$idx';
+    var candidate = toCamelCase(raw, fieldNumber: idx + 1);
+    while (used.contains(candidate)) {
+      candidate = '${candidate}_oneof_$idx';
+    }
+    used.add(candidate);
+    names[idx] = candidate;
+  }
+  return names;
+}
+
 String shortTypeName(String fqn) {
   final idx = fqn.lastIndexOf('.');
   return escapeTypeName(idx >= 0 ? fqn.substring(idx + 1) : fqn);
@@ -333,6 +355,7 @@ String wireTypeConst(int pbType) {
       return 'ob.WireType.string';
     case PbType.bytesType:
       return 'ob.WireType.bytes';
+    case PbType.groupType:
     case PbType.messageType:
       return 'ob.WireType.subMsg';
     default:

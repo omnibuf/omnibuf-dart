@@ -7,69 +7,91 @@ import 'descriptor.dart';
 /// Generates idiomatic OmniBuf Dart source code for a [CodeGeneratorRequest].
 CodeGeneratorResponse generateOmniBufDart(CodeGeneratorRequest req) {
   final resp = CodeGeneratorResponse();
-  final targetSet = req.fileToGenerate.toSet();
+  try {
+    final targetSet = req.fileToGenerate.toSet();
+    final closedEnums = collectEnumClosedMap(req.protoFiles);
+    final enumValues = collectEnumValuesMap(req.protoFiles);
 
-  final mapEntries = <String, ProtoMessageDescriptor>{};
-  final typeRegistry = <String, TypeRef>{};
-  final knownFiles = <String>{};
-
-  void collectFile(ProtoFileDescriptor f) {
-    knownFiles.add(f.name);
-    final pkgScope = f.packageName.isEmpty ? '' : '.${f.packageName}';
-
-    void collectEnum(ProtoEnumDescriptor e, String scope, String dartPrefix) {
-      final fqn = '$scope.${e.name}';
-      final dartName = escapeTypeName(
-        dartPrefix.isEmpty ? e.name : '${dartPrefix}_${e.name}',
-      );
-      typeRegistry[fqn] = TypeRef(
-        fileName: f.name,
-        dartName: dartName,
-        opaqueName: 'Opaque$dartName',
+    for (final file in req.protoFiles) {
+      if (targetSet.isNotEmpty && !targetSet.contains(file.name)) continue;
+      resolveEditions(
+        file,
+        closedEnums: closedEnums,
+        enumValues: enumValues,
       );
     }
 
-    void collectMsg(ProtoMessageDescriptor m, String scope, String dartPrefix) {
-      final fqn = '$scope.${m.name}';
-      if (m.isMapEntry) {
-        mapEntries[fqn] = m;
-        return;
+    final mapEntries = <String, ProtoMessageDescriptor>{};
+    final typeRegistry = <String, TypeRef>{};
+    final knownFiles = <String>{};
+
+    void collectFile(ProtoFileDescriptor f) {
+      knownFiles.add(f.name);
+      final pkgScope = f.packageName.isEmpty ? '' : '.${f.packageName}';
+
+      void collectEnum(ProtoEnumDescriptor e, String scope, String dartPrefix) {
+        final fqn = '$scope.${e.name}';
+        final dartName = escapeTypeName(
+          dartPrefix.isEmpty ? e.name : '${dartPrefix}_${e.name}',
+        );
+        typeRegistry[fqn] = TypeRef(
+          fileName: f.name,
+          dartName: dartName,
+          opaqueName: 'Opaque$dartName',
+        );
       }
-      final dartName = escapeTypeName(
-        dartPrefix.isEmpty ? m.name : '${dartPrefix}_${m.name}',
-      );
-      typeRegistry[fqn] = TypeRef(
-        fileName: f.name,
-        dartName: dartName,
-        opaqueName: 'Opaque$dartName',
-      );
-      for (final e in m.enumTypes) {
-        collectEnum(e, fqn, dartName);
+
+      void collectMsg(
+        ProtoMessageDescriptor m,
+        String scope,
+        String dartPrefix,
+      ) {
+        final fqn = '$scope.${m.name}';
+        if (m.isMapEntry) {
+          mapEntries[fqn] = m;
+          return;
+        }
+        final dartName = escapeTypeName(
+          dartPrefix.isEmpty ? m.name : '${dartPrefix}_${m.name}',
+        );
+        typeRegistry[fqn] = TypeRef(
+          fileName: f.name,
+          dartName: dartName,
+          opaqueName: 'Opaque$dartName',
+        );
+        for (final e in m.enumTypes) {
+          collectEnum(e, fqn, dartName);
+        }
+        for (final nested in m.nestedTypes) {
+          collectMsg(nested, fqn, dartName);
+        }
       }
-      for (final nested in m.nestedTypes) {
-        collectMsg(nested, fqn, dartName);
+
+      for (final e in f.enums) {
+        collectEnum(e, pkgScope, '');
+      }
+      for (final m in f.messages) {
+        collectMsg(m, pkgScope, '');
       }
     }
 
-    for (final e in f.enums) {
-      collectEnum(e, pkgScope, '');
+    for (final f in req.protoFiles) {
+      collectFile(f);
     }
-    for (final m in f.messages) {
-      collectMsg(m, pkgScope, '');
+
+    for (final f in req.protoFiles) {
+      if (targetSet.isNotEmpty && !targetSet.contains(f.name)) continue;
+      final outName = outputFileName(f.name);
+      final content = _generateFile(f, mapEntries, typeRegistry, knownFiles);
+      resp.files
+          .add(CodeGeneratorResponseFile(name: outName, content: content));
     }
+    return resp;
+  } on FormatException catch (e) {
+    resp.files.clear();
+    resp.error = e.message;
+    return resp;
   }
-
-  for (final f in req.protoFiles) {
-    collectFile(f);
-  }
-
-  for (final f in req.protoFiles) {
-    if (targetSet.isNotEmpty && !targetSet.contains(f.name)) continue;
-    final outName = outputFileName(f.name);
-    final content = _generateFile(f, mapEntries, typeRegistry, knownFiles);
-    resp.files.add(CodeGeneratorResponseFile(name: outName, content: content));
-  }
-  return resp;
 }
 
 String _generateFile(
@@ -90,14 +112,39 @@ String _generateFile(
   sb.writeln("import 'package:omnibuf/omnibuf.dart' as ob;");
 
   final depAliases = <String, String>{};
-  final depImports = <String>[];
   var depIndex = 0;
   for (final dep in file.dependencies) {
     if (dep == file.name) continue;
-    final relPath = relativeImportPath(file.name, dep);
     if (knownFiles.contains(dep)) {
-      final alias = 'dep_${depIndex++}';
-      depAliases[dep] = alias;
+      depAliases[dep] = 'dep_${depIndex++}';
+    }
+  }
+
+  final ctx = CodegenContext(
+    currentFile: file.name,
+    mapEntries: mapEntries,
+    typeRegistry: typeRegistry,
+    depAliases: depAliases,
+  );
+
+  final body = StringBuffer();
+  final pkgScope = file.packageName.isEmpty ? '' : '.${file.packageName}';
+  for (final e in file.enums) {
+    _generateEnum(body, e, escapeTypeName(e.name));
+  }
+
+  for (final m in file.messages) {
+    if (m.isMapEntry) continue;
+    _generateMessageTree(body, m, pkgScope, '', ctx);
+  }
+
+  final depImports = <String>[];
+  for (final dep in file.dependencies) {
+    if (dep == file.name) continue;
+    if (knownFiles.contains(dep) && !ctx.usedDeps.contains(dep)) continue;
+    final relPath = relativeImportPath(file.name, dep);
+    final alias = depAliases[dep];
+    if (alias != null) {
       depImports.add("import '$relPath' as $alias;");
     } else {
       depImports.add("import '$relPath';");
@@ -111,23 +158,7 @@ String _generateFile(
     }
   }
   sb.writeln();
-
-  final ctx = CodegenContext(
-    currentFile: file.name,
-    mapEntries: mapEntries,
-    typeRegistry: typeRegistry,
-    depAliases: depAliases,
-  );
-
-  final pkgScope = file.packageName.isEmpty ? '' : '.${file.packageName}';
-  for (final e in file.enums) {
-    _generateEnum(sb, e, escapeTypeName(e.name));
-  }
-
-  for (final m in file.messages) {
-    if (m.isMapEntry) continue;
-    _generateMessageTree(sb, m, pkgScope, '', ctx);
-  }
+  sb.write(body);
 
   return sb.toString();
 }
@@ -170,8 +201,42 @@ void _generateMessageTree(
     ..sort((a, b) => a.number.compareTo(b.number));
   final fieldNames = assignFieldNames(sortedFields);
 
-  emitEagerMessage(sb, className, fullName, sortedFields, fieldNames, ctx);
-  emitOpaqueMessage(sb, className, sortedFields, fieldNames, ctx);
+  final oneofFields = <int, List<ProtoFieldDescriptor>>{};
+  for (final f in sortedFields) {
+    if (f.isRealOneof) {
+      oneofFields
+          .putIfAbsent(f.oneofIndex!, () => <ProtoFieldDescriptor>[])
+          .add(f);
+    }
+  }
+  final realOneofIndices = oneofFields.keys.toList()..sort();
+  final oneofNames = assignOneofNames(
+    realOneofIndices,
+    m.oneofs,
+    fieldNames.values.toSet(),
+  );
+
+  emitEagerMessage(
+    sb,
+    className,
+    fullName,
+    sortedFields,
+    fieldNames,
+    realOneofIndices,
+    oneofNames,
+    oneofFields,
+    ctx,
+  );
+  emitOpaqueMessage(
+    sb,
+    className,
+    sortedFields,
+    fieldNames,
+    realOneofIndices,
+    oneofNames,
+    oneofFields,
+    ctx,
+  );
 
   for (final nested in m.nestedTypes) {
     if (nested.isMapEntry) continue;
